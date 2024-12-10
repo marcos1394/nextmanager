@@ -14,7 +14,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/stack": "^6.4.1",
     "@stripe/stripe-react-native": "^0.38.6",
-    "expo": "^51.0.34",
+    "expo": "^52.0.17",
     "expo-status-bar": "~1.12.1",
     "expo-updates": "~0.25.27",
     "react": "18.2.0",
