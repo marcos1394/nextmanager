@@ -6,7 +6,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    
     "splash": {
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -14,22 +16,33 @@
       "supportsTablet": true
     },
     "android": {
+      "minSdkVersion": 23,
+      "targetSdkVersion": 33,
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.nextmanager.app"
     },
-    "web": {},
-    "extra": {
-      "eas": {
-        "projectId": "8387b113-b372-4944-8b0e-8c1c65945631"
-      }
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
+
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/8387b113-b372-4944-8b0e-8c1c65945631"
+    },
+
+    "plugins": [
+      "expo-build-properties"
+    ],
+
+    "extra": {
+      "eas": {
+        "projectId": "8387b113-b372-4944-8b0e-8c1c65945631"
+      }
     }
   }
 }
