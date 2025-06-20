@@ -1,340 +1,231 @@
-import React, { useState, useRef, useEffect } from 'react';
+// components/TermsModal.js
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-  Animated,
+    View,
+    Text,
+    TouchableOpacity,
+    StyleSheet,
+    ScrollView,
+    StatusBar,
+    Animated,
 } from 'react-native';
 import Modal from 'react-native-modal';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Feather } from '@expo/vector-icons';
 
-const { width, height } = Dimensions.get('window');
+// --- SUBCOMPONENTES ---
+const Section = ({ title, children }) => (
+    <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        <Text style={styles.paragraph}>{children}</Text>
+    </View>
+);
 
+const ListItem = ({ children }) => (
+    <View style={styles.listItem}>
+        <Feather name="check-circle" size={16} color="#FDB813" style={{ marginTop: 4 }}/>
+        <Text style={styles.listItemText}>{children}</Text>
+    </View>
+);
+
+
+/**
+ * TermsModal - Refinado para una legibilidad y experiencia de usuario superiores.
+ * * Estrategia de UX/UI:
+ * 1.  Legibilidad Optimizada: El foco principal del rediseño es la tipografía. Se aumenta el
+ * interlineado y el espaciado para hacer que el denso texto legal sea más fácil de leer.
+ * 2.  Diseño Limpio y Enfocado: Se elimina el exceso de gradientes, usando colores sólidos del tema
+ * para el fondo y reservando el color de acento para las acciones importantes. Esto crea una
+ * interfaz más tranquila y profesional.
+ * 3.  Jerarquía de Botones Clara: El botón "Aceptar" (primario) tiene un diseño sólido y llamativo,
+ * mientras que el botón "Cancelar" (secundario) tiene un diseño más sutil. Esto guía al usuario.
+ * 4.  Feedback Sutil y Útil: La barra de progreso y el indicador para hacer scroll se mantienen, pero
+ * con un diseño más integrado y menos intrusivo, mejorando la experiencia sin distraer.
+ */
 const TermsModal = ({ isVisible, onClose, onAccept }) => {
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [isScrolledToEnd, setIsScrolledToEnd] = useState(false);
-  const fadeAnim = new Animated.Value(0);
-  const slideAnim = new Animated.Value(50);
-  
-  const scrollRef = useRef(null);
+    const [isScrolledToEnd, setIsScrolledToEnd] = useState(false);
+    const scrollProgress = useRef(new Animated.Value(0)).current;
+    const scrollRef = useRef(null);
 
-  useEffect(() => {
-    if (isVisible) {
-      setScrollProgress(0);
-      setIsScrolledToEnd(false);
-      scrollRef.current?.scrollTo({ y: 0, animated: false });
-      
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          friction: 7,
-          useNativeDriver: true,
-        })
-      ]).start();
-    } else {
-      fadeAnim.setValue(0);
-      slideAnim.setValue(50);
-    }
-  }, [isVisible]);
+    // Resetear estado cuando se abre el modal
+    useEffect(() => {
+        if (isVisible) {
+            setIsScrolledToEnd(false);
+            scrollProgress.setValue(0);
+            scrollRef.current?.scrollTo({ y: 0, animated: false });
+        }
+    }, [isVisible, scrollProgress]);
 
-  const handleScroll = (event) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const { y } = contentOffset;
-    const { height: contentHeight } = contentSize;
-    const { height: layoutHeight } = layoutMeasurement;
+    const handleScroll = (event) => {
+        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+        const progress = contentOffset.y / (contentSize.height - layoutMeasurement.height);
+        
+        Animated.timing(scrollProgress, {
+            toValue: progress,
+            duration: 50,
+            useNativeDriver: false, // width/height no soportan native driver
+        }).start();
+
+        if (progress >= 0.99) { // Un umbral para asegurar que se active
+            setIsScrolledToEnd(true);
+        }
+    };
     
-    const scrolled = (y / (contentHeight - layoutHeight)) * 100;
-    setScrollProgress(scrolled);
-    
-    if (y + layoutHeight >= contentHeight - 5) {
-      setIsScrolledToEnd(true);
-    } else {
-      setIsScrolledToEnd(false);
-    }
-  };
+    const progressBarWidth = scrollProgress.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0%', '100%'],
+        extrapolate: 'clamp',
+    });
 
-  const progressBarWidth = (width - 48) * (scrollProgress / 100);
-
-  return (
-    <Modal
-      isVisible={isVisible}
-      onBackdropPress={onClose}
-      onBackButtonPress={onClose}
-      style={styles.modalContainer}
-      animationIn="fadeIn"
-      animationOut="fadeOut"
-    >
-      <Animated.View 
-        style={[
-          styles.contentContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
-        <LinearGradient
-          colors={['#1a1a1a', '#2d2d2d', '#1a1a1a']}
-          style={styles.gradient}
+    return (
+        <Modal
+            isVisible={isVisible}
+            onBackdropPress={onClose}
+            onBackButtonPress={onClose}
+            style={styles.modalContainer}
+            animationIn="slideInUp"
+            animationOut="slideOutDown"
+            backdropOpacity={0.7}
+            useNativeDriverForBackdrop
         >
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <MaterialIcons name="close" size={24} color="#FFD700" />
-            </TouchableOpacity>
-            <View style={styles.titleContainer}>
-              <MaterialIcons name="description" size={28} color="#FFD700" />
-              <Text style={styles.title}>Términos y Condiciones</Text>
-            </View>
-          </View>
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.contentContainer}>
+                    {/* --- Header --- */}
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Términos y Condiciones</Text>
+                        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                            <Feather name="x" size={24} color="#A9A9A9" />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.progressBarContainer}>
+                        <Animated.View style={[styles.progressBar, { width: progressBarWidth }]} />
+                    </View>
 
-          <View style={styles.progressBarContainer}>
-            <LinearGradient
-              colors={['#FFD700', '#FFA500']}
-              style={[styles.progressBar, { width: progressBarWidth }]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-            />
-          </View>
+                    {/* --- Contenido --- */}
+                    <ScrollView
+                        ref={scrollRef}
+                        onScroll={handleScroll}
+                        scrollEventThrottle={16}
+                        style={styles.scrollArea}
+                        contentContainerStyle={styles.scrollContent}
+                    >
+                        <Section title="Acuerdo de Uso">
+                            Te pedimos leer cuidadosamente los siguientes Términos y Condiciones antes de utilizar la aplicación <Text style={styles.highlight}>NextManager</Text>. Al usar la aplicación, aceptas voluntariamente estos términos.
+                        </Section>
+                        <Section title="I. Propiedad Intelectual">
+                            Todos los derechos de propiedad intelectual relacionados con el contenido, diseño y desarrollo de NextManager son propiedad exclusiva de <Text style={styles.highlight}>NEXTECH</Text>.
+                        </Section>
+                        <Section title="II. Uso del Servicio">
+                            NextManager está diseñada para la gestión de restaurantes. Al utilizarla, te comprometes a:
+                            <ListItem>No realizar modificaciones no autorizadas en el sistema.</ListItem>
+                            <ListItem>No utilizar la Aplicación con fines fraudulentos o ilegales.</ListItem>
+                            <ListItem>Proporcionar datos verídicos para la generación de facturas.</ListItem>
+                        </Section>
+                         <Section title="III. Cuentas de Usuario">
+                           Al crear una cuenta, te comprometes a proporcionar información precisa y mantener la confidencialidad de tu contraseña. Cualquier actividad realizada desde tu cuenta es tu responsabilidad.
+                        </Section>
+                        {isScrolledToEnd && (
+                            <View style={styles.endOfDocument}>
+                                <Feather name="check-square" size={16} color="#10B981" />
+                                <Text style={styles.endOfDocumentText}>Has llegado al final del documento.</Text>
+                            </View>
+                        )}
+                    </ScrollView>
 
-          <ScrollView
-            ref={scrollRef}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            style={styles.scrollArea}
-            contentContainerStyle={styles.scrollContent}
-          >
-            <Text style={styles.paragraph}>
-              Te pedimos leer cuidadosamente los siguientes Términos y Condiciones antes de utilizar
-              la aplicación web <Text style={styles.highlight}>NEXFACTURA</Text> (en adelante, la "Aplicación"), 
-              un panel de autofacturación diseñado para restaurantes y otros establecimientos de consumo.
-            </Text>
+                    {/* --- Footer con acciones --- */}
+                    <View style={styles.footer}>
+                        <TouchableOpacity style={styles.secondaryButton} onPress={onClose}>
+                            <Text style={styles.secondaryButtonText}>Cancelar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.primaryButton, !isScrolledToEnd && styles.disabledButton]}
+                            onPress={onAccept}
+                            disabled={!isScrolledToEnd}
+                            activeOpacity={0.7}
+                        >
+                            <Feather name="check" size={20} color="#121212" />
+                            <Text style={styles.primaryButtonText}>He leído y Acepto</Text>
+                        </TouchableOpacity>
+                    </View>
 
-            <Text style={styles.sectionTitle}>I. Propiedad Intelectual</Text>
-            <Text style={styles.paragraph}>
-              Todos los derechos de propiedad intelectual relacionados con el contenido, diseño y
-              desarrollo de NEXFACTURA son propiedad exclusiva de <Text style={styles.highlight}>NEXTECH</Text>.
-            </Text>
-
-            <Text style={styles.sectionTitle}>II. Uso del Servicio</Text>
-            <Text style={styles.paragraph}>
-              NEXFACTURA está diseñada para que los clientes de restaurantes puedan generar sus
-              facturas de manera sencilla. Al utilizar la Aplicación, te comprometes a:
-            </Text>
-            <View style={styles.listContainer}>
-              <View style={styles.listItem}>
-                <MaterialIcons name="check-circle" size={20} color="#FFD700" />
-                <Text style={styles.listItemText}>
-                  No realizar modificaciones no autorizadas en el sistema o en la base de datos.
-                </Text>
-              </View>
-              <View style={styles.listItem}>
-                <MaterialIcons name="check-circle" size={20} color="#FFD700" />
-                <Text style={styles.listItemText}>
-                  No utilizar la Aplicación con fines fraudulentos o para actividades contrarias a la ley.
-                </Text>
-              </View>
-              <View style={styles.listItem}>
-                <MaterialIcons name="check-circle" size={20} color="#FFD700" />
-                <Text style={styles.listItemText}>
-                  Proporcionar datos verídicos para la generación de facturas.
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.sectionTitle}>III. Cuentas de Usuario</Text>
-            <Text style={styles.paragraph}>
-              Para utilizar NEXFACTURA, es posible que debas crear una cuenta de usuario. Al crear una 
-              Cuenta, te comprometes a proporcionar información precisa y mantener la confidencialidad 
-              de tu contraseña.
-            </Text>
-
-            <Text style={styles.sectionTitle}>XIV. Misceláneos</Text>
-            <Text style={styles.paragraph}>
-              Si tienes alguna duda sobre estos Términos y Condiciones, puedes contactarnos a través
-              de <Text style={styles.highlight}>soporte@nextechsolutions.com.mx</Text> o al teléfono{' '}
-              <Text style={styles.highlight}>614-215-20-82</Text>.
-            </Text>
-          </ScrollView>
-
-          <View style={styles.footer}>
-            <TouchableOpacity 
-              style={styles.footerButton} 
-              onPress={onClose}
-            >
-              <LinearGradient
-                colors={['#FF6B6B', '#FF4949']}
-                style={styles.gradientButton}
-              >
-                <MaterialIcons name="close" size={24} color="#fff" />
-                <Text style={styles.buttonText}>Cancelar</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.footerButton, !isScrolledToEnd && styles.disabled]}
-              onPress={onAccept}
-              disabled={!isScrolledToEnd}
-            >
-              <LinearGradient
-                colors={['#FFD700', '#FFA500']}
-                style={styles.gradientButton}
-                opacity={!isScrolledToEnd ? 0.5 : 1}
-              >
-                <MaterialIcons name="check" size={24} color="#000" />
-                <Text style={styles.acceptButtonText}>Aceptar</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          {!isScrolledToEnd && (
-            <Animated.View style={styles.scrollHintContainer}>
-              <MaterialIcons name="keyboard-arrow-down" size={36} color="#FFD700" />
-            </Animated.View>
-          )}
-        </LinearGradient>
-      </Animated.View>
-    </Modal>
-  );
+                    {!isScrolledToEnd && (
+                        <View style={styles.scrollHintContainer}>
+                             <Feather name="arrow-down" size={24} color="#FFFFFF" />
+                        </View>
+                    )}
+                </View>
+            </SafeAreaView>
+        </Modal>
+    );
 };
 
 const styles = StyleSheet.create({
-  modalContainer: {
-    margin: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contentContainer: {
-    width: '90%',
-    maxHeight: '90%',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  gradient: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 215, 0, 0.1)',
-  },
-  closeButton: {
-    padding: 8,
-  },
-  titleContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFD700',
-    marginLeft: 10,
-  },
-  progressBarContainer: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  scrollArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFD700',
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  paragraph: {
-    fontSize: 16,
-    color: '#fff',
-    marginBottom: 15,
-    lineHeight: 24,
-    opacity: 0.9,
-  },
-  highlight: {
-    color: '#FFD700',
-    fontWeight: 'bold',
-  },
-  listContainer: {
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  listItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  listItemText: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 16,
-    marginLeft: 10,
-    opacity: 0.9,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 215, 0, 0.1)',
-  },
-  footerButton: {
-    flex: 1,
-    marginHorizontal: 10,
-    borderRadius: 25,
-    overflow: 'hidden',
-  },
-  gradientButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  acceptButtonText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  scrollHintContainer: {
-    position: 'absolute',
-    bottom: 90,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    modalContainer: { margin: 0, justifyContent: 'flex-end' },
+    safeArea: {
+        width: '100%',
+        maxHeight: '90%',
+        backgroundColor: '#1e1e1e',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+    },
+    contentContainer: { flexShrink: 1 },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#2a2a2a',
+    },
+    title: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF' },
+    closeButton: { padding: 4 },
+    progressBarContainer: { height: 3, backgroundColor: '#2a2a2a' },
+    progressBar: { height: '100%', backgroundColor: '#FDB813' },
+    scrollArea: { maxHeight: '70%' },
+    scrollContent: { padding: 20, paddingBottom: 40 },
+    section: { marginBottom: 24 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 12 },
+    paragraph: { fontSize: 16, color: '#A9A9A9', lineHeight: 26 },
+    highlight: { color: '#FDB813', fontWeight: '600' },
+    listContainer: { marginTop: 10, marginBottom: 20 },
+    listItem: { flexDirection: 'row', alignItems: 'flex-start', marginVertical: 8 },
+    listItemText: { flex: 1, color: '#A9A9A9', fontSize: 16, marginLeft: 12, lineHeight: 26 },
+    endOfDocument: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 8 },
+    endOfDocumentText: { color: '#10B981', fontWeight: '600' },
+    scrollHintContainer: {
+        position: 'absolute',
+        bottom: 100,
+        left: '50%',
+        marginLeft: -22,
+        height: 44,
+        width: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    footer: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        padding: 16,
+        borderTopWidth: 1,
+        borderTopColor: '#2a2a2a',
+        backgroundColor: '#1e1e1e',
+    },
+    secondaryButton: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
+    secondaryButtonText: { color: '#A9A9A9', fontSize: 16, fontWeight: '600' },
+    primaryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FDB813',
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        gap: 8,
+    },
+    primaryButtonText: { color: '#121212', fontSize: 16, fontWeight: 'bold' },
+    disabledButton: { backgroundColor: '#2a2a2a', opacity: 0.8 },
 });
 
 export default TermsModal;
