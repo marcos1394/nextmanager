@@ -1,0 +1,51 @@
+# .github/workflows/eas-build.yml
+# Flujo de trabajo definitivo para compilar una APK de Android con EAS Build
+
+name: Compilar APK para Android
+
+# Define cuándo se ejecutará esta acción
+on:
+  # Se activa cuando haces 'push' a la rama 'main'
+  # Puedes cambiar 'main' a 'develop' o añadir más ramas
+  push:
+    branches:
+      - main
+
+# Define los trabajos a realizar
+jobs:
+  build:
+    # El trabajo se ejecutará en una máquina virtual de Ubuntu
+    runs-on: ubuntu-latest
+
+    # Los pasos que seguirá el trabajo
+    steps:
+      # 1. Descarga tu código del repositorio a la máquina virtual
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configura el entorno de Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      # 3. Instala las dependencias de tu proyecto (npm install)
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Instala y configura Expo y EAS CLI.
+      #    Este es el paso clave donde nos autenticamos usando los secretos.
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v8
+        with:
+          # Inicia sesión usando el usuario y contraseña que guardamos en GitHub Secrets
+          username: ${{ secrets.EXPO_CLI_USERNAME }}
+          password: ${{ secrets.EXPO_CLI_PASSWORD }}
+          # Especifica las versiones de las herramientas a usar
+          expo-version: latest
+          eas-version: latest
+
+      # 5. Ejecuta el comando de compilación de EAS
+      - name: Start EAS Build
+        # --non-interactive es crucial para que el proceso no se detenga a hacer preguntas
+        run: eas build --platform android --profile preview --non-interactive
