@@ -1,8 +1,9 @@
 // screens/RegisterScreen.js
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
+    TextInput,
     TouchableOpacity,
     StyleSheet,
     StatusBar,
@@ -10,98 +11,413 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    Animated
+    Animated,
+    Dimensions,
+    Haptics
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
-// --- SUBCOMPONENTES DE UI ---
+const { width: screenWidth } = Dimensions.get('window');
 
-const InputField = ({ icon, placeholder, value, onChangeText, secureTextEntry = false, keyboardType = 'default' }) => {
-    // Reutilizamos el componente de InputField de LoginScreen para consistencia
+// --- COMPONENTES UI MEJORADOS ---
+
+const InputField = ({ 
+    icon, 
+    placeholder, 
+    value, 
+    onChangeText, 
+    secureTextEntry = false, 
+    keyboardType = 'default',
+    error = null,
+    success = false 
+}) => {
     const [isFocused, setIsFocused] = useState(false);
     const [isPasswordVisible, setIsPasswordVisible] = useState(!secureTextEntry);
+    const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
+    const shakeAnimation = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.timing(animatedIsFocused, {
+            toValue: (isFocused || value) ? 1 : 0,
+            duration: 200,
+            useNativeDriver: false,
+        }).start();
+    }, [animatedIsFocused, isFocused, value]);
+
+    useEffect(() => {
+        if (error) {
+            Animated.sequence([
+                Animated.timing(shakeAnimation, { toValue: 10, duration: 100, useNativeDriver: true }),
+                Animated.timing(shakeAnimation, { toValue: -10, duration: 100, useNativeDriver: true }),
+                Animated.timing(shakeAnimation, { toValue: 10, duration: 100, useNativeDriver: true }),
+                Animated.timing(shakeAnimation, { toValue: 0, duration: 100, useNativeDriver: true }),
+            ]).start();
+            
+            if (Platform.OS === 'ios') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+        }
+    }, [error, shakeAnimation]);
+
+    const labelStyle = {
+        position: 'absolute',
+        left: 50,
+        top: animatedIsFocused.interpolate({
+            inputRange: [0, 1],
+            outputRange: [18, 8],
+        }),
+        fontSize: animatedIsFocused.interpolate({
+            inputRange: [0, 1],
+            outputRange: [16, 12],
+        }),
+        color: animatedIsFocused.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['#888', isFocused ? '#FDB813' : (error ? '#FF6B6B' : success ? '#10B981' : '#888')],
+        }),
+    };
+
+    const getBorderColor = () => {
+        if (error) return '#FF6B6B';
+        if (success) return '#10B981';
+        if (isFocused) return '#FDB813';
+        return 'transparent';
+    };
+
     return (
-        <View style={[styles.inputContainer, isFocused && styles.inputContainerFocused]}>
-            <Feather name={icon} size={20} color={isFocused ? '#FDB813' : '#888'} style={styles.inputIcon} />
-            <TextInput style={styles.input} placeholder={placeholder} placeholderTextColor="#888" value={value} onChangeText={onChangeText} secureTextEntry={!isPasswordVisible} keyboardType={keyboardType} autoCapitalize="none" onFocus={() => setIsFocused(true)} onBlur={() => setIsFocused(false)} />
-            {secureTextEntry && (
-                <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
-                    <Feather name={isPasswordVisible ? 'eye-off' : 'eye'} size={20} color="#888" />
-                </TouchableOpacity>
+        <View style={styles.inputWrapper}>
+            <Animated.View 
+                style={[
+                    styles.inputContainer, 
+                    { 
+                        borderColor: getBorderColor(),
+                        transform: [{ translateX: shakeAnimation }]
+                    }
+                ]}
+            >
+                <Feather 
+                    name={icon} 
+                    size={20} 
+                    color={error ? '#FF6B6B' : success ? '#10B981' : (isFocused ? '#FDB813' : '#888')} 
+                    style={styles.inputIcon} 
+                />
+                <View style={styles.inputContent}>
+                    <Animated.Text style={labelStyle}>
+                        {placeholder}
+                    </Animated.Text>
+                    <TextInput
+                        style={[styles.input, { paddingTop: (isFocused || value) ? 20 : 0 }]}
+                        value={value}
+                        onChangeText={onChangeText}
+                        secureTextEntry={secureTextEntry && !isPasswordVisible}
+                        keyboardType={keyboardType}
+                        autoCapitalize="none"
+                        onFocus={() => setIsFocused(true)}
+                        onBlur={() => setIsFocused(false)}
+                        placeholderTextColor="transparent"
+                    />
+                </View>
+                {secureTextEntry && (
+                    <TouchableOpacity onPress={() => setIsPasswordVisible(!isPasswordVisible)}>
+                        <Feather 
+                            name={isPasswordVisible ? 'eye-off' : 'eye'} 
+                            size={20} 
+                            color={isFocused ? '#FDB813' : '#888'} 
+                        />
+                    </TouchableOpacity>
+                )}
+                {success && !secureTextEntry && (
+                    <Feather name="check-circle" size={20} color="#10B981" />
+                )}
+            </Animated.View>
+            {error && (
+                <Animated.View style={styles.errorContainer}>
+                    <Feather name="alert-circle" size={14} color="#FF6B6B" />
+                    <Text style={styles.errorText}>{error}</Text>
+                </Animated.View>
             )}
         </View>
     );
 };
 
-const ProgressStepper = ({ currentStep, totalSteps = 3 }) => (
-    <View style={styles.stepperContainer}>
-        {Array.from({ length: totalSteps }).map((_, index) => (
-            <React.Fragment key={index}>
-                <View style={[styles.step, index < currentStep && styles.stepActive]}>
-                    <Text style={[styles.stepText, index < currentStep && styles.stepTextActive]}>{index + 1}</Text>
-                </View>
-                {index < totalSteps - 1 && <View style={[styles.stepLine, index < currentStep - 1 && styles.stepLineActive]} />}
-            </React.Fragment>
-        ))}
-    </View>
-);
+const ProgressStepper = ({ currentStep, totalSteps = 3 }) => {
+    const animatedValues = useRef(
+        Array.from({ length: totalSteps }, () => new Animated.Value(0))
+    ).current;
 
-const PasswordCriteriaItem = ({ text, met }) => (
-     <View style={styles.criteriaItem}>
-        <Feather name={met ? "check-circle" : "circle"} size={14} color={met ? "#10B981" : "#888"} />
-        <Text style={[styles.criteriaText, met && styles.criteriaMet]}>{text}</Text>
-    </View>
-);
+    useEffect(() => {
+        animatedValues.forEach((animatedValue, index) => {
+            Animated.timing(animatedValue, {
+                toValue: index < currentStep ? 1 : 0,
+                duration: 300,
+                useNativeDriver: false,
+            }).start();
+        });
+    }, [currentStep, animatedValues]);
 
-/**
- * RegisterScreen - Reimaginada como un asistente de registro guiado (wizard).
- * * Estrategia de UX/UI:
- * 1.  Wizard Multi-Paso: Se divide el formulario largo en 3 pasos manejables (Cuenta, Negocio,
- * Finalizar). Esto reduce la carga cognitiva y hace que el proceso se sienta más rápido y menos intimidante.
- * 2.  Guía Visual de Progreso: Un "stepper" en la parte superior muestra al usuario dónde se encuentra
- * en el proceso, gestionando sus expectativas y motivándolo a completar el registro.
- * 3.  UI Limpia y Enfocada: Cada paso se enfoca en una sola tarea. El diseño es limpio, con una clara
- * jerarquía visual y una estética premium consistente con el resto de la app.
- * 4.  Feedback Interactivo: La validación de la contraseña es visual e instantánea, y los botones
- * se activan condicionalmente, guiando al usuario de forma natural a través del formulario.
- */
+    return (
+        <View style={styles.stepperContainer}>
+            {Array.from({ length: totalSteps }).map((_, index) => (
+                <React.Fragment key={index}>
+                    <Animated.View 
+                        style={[
+                            styles.step,
+                            {
+                                backgroundColor: animatedValues[index].interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ['#2a2a2a', '#FDB813'],
+                                }),
+                                borderColor: animatedValues[index].interpolate({
+                                    inputRange: [0, 1],
+                                    outputRange: ['#2a2a2a', '#FDB813'],
+                                }),
+                                transform: [{
+                                    scale: animatedValues[index].interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [1, 1.1],
+                                    }),
+                                }]
+                            }
+                        ]}
+                    >
+                        <Animated.Text 
+                            style={[
+                                styles.stepText,
+                                {
+                                    color: animatedValues[index].interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: ['#888', '#121212'],
+                                    }),
+                                }
+                            ]}
+                        >
+                            {index + 1}
+                        </Animated.Text>
+                    </Animated.View>
+                    {index < totalSteps - 1 && (
+                        <Animated.View 
+                            style={[
+                                styles.stepLine,
+                                {
+                                    backgroundColor: animatedValues[index].interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: ['#2a2a2a', '#FDB813'],
+                                    }),
+                                }
+                            ]} 
+                        />
+                    )}
+                </React.Fragment>
+            ))}
+        </View>
+    );
+};
+
+const PasswordCriteriaItem = ({ text, met, animated = false }) => {
+    const scaleAnim = useRef(new Animated.Value(0.8)).current;
+    
+    useEffect(() => {
+        if (animated && met) {
+            Animated.spring(scaleAnim, {
+                toValue: 1.1,
+                duration: 200,
+                useNativeDriver: true,
+            }).start(() => {
+                Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    duration: 150,
+                    useNativeDriver: true,
+                }).start();
+            });
+        } else {
+            scaleAnim.setValue(1);
+        }
+    }, [met, animated, scaleAnim]);
+
+    return (
+        <Animated.View style={[styles.criteriaItem, { transform: [{ scale: scaleAnim }] }]}>
+            <Feather 
+                name={met ? "check-circle" : "circle"} 
+                size={16} 
+                color={met ? "#10B981" : "#666"} 
+            />
+            <Text style={[styles.criteriaText, met && styles.criteriaMet]}>
+                {text}
+            </Text>
+        </Animated.View>
+    );
+};
+
+const CustomButton = ({ title, onPress, disabled, loading, style, variant = 'primary' }) => {
+    const scaleAnim = useRef(new Animated.Value(1)).current;
+    
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 0.95,
+            useNativeDriver: true,
+        }).start();
+    };
+    
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            useNativeDriver: true,
+        }).start();
+    };
+
+    const getButtonStyle = () => {
+        switch (variant) {
+            case 'secondary':
+                return [styles.secondaryButton, disabled && styles.buttonDisabled];
+            default:
+                return [styles.primaryButton, disabled && styles.buttonDisabled];
+        }
+    };
+
+    const getTextStyle = () => {
+        switch (variant) {
+            case 'secondary':
+                return styles.secondaryButtonText;
+            default:
+                return styles.primaryButtonText;
+        }
+    };
+
+    return (
+        <TouchableOpacity
+            onPress={onPress}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            disabled={disabled || loading}
+            activeOpacity={0.8}
+        >
+            <Animated.View style={[getButtonStyle(), style, { transform: [{ scale: scaleAnim }] }]}>
+                <Text style={getTextStyle()}>
+                    {title}
+                </Text>
+            </Animated.View>
+        </TouchableOpacity>
+    );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 const RegisterScreen = () => {
     const navigation = useNavigation();
     const [currentStep, setCurrentStep] = useState(1);
-    const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '', restaurantName: '', phoneNumber: '', termsAccepted: false });
-    const [passwordCriteria, setPasswordCriteria] = useState({ length: false, uppercase: false, number: false });
+    const [formData, setFormData] = useState({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        restaurantName: '',
+        phoneNumber: '',
+        termsAccepted: false
+    });
+    
+    const [errors, setErrors] = useState({});
+    const [passwordCriteria, setPasswordCriteria] = useState({
+        length: false,
+        uppercase: false,
+        number: false,
+        special: false
+    });
 
-    // Animaciones
+    // Animaciones mejoradas
     const stepAnim = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+
+    const validateEmail = (email) => {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    };
 
     const validatePassword = (value) => {
-        setPasswordCriteria({
+        const criteria = {
             length: value.length >= 8,
             uppercase: /[A-Z]/.test(value),
             number: /\d/.test(value),
-        });
+            special: /[!@#$%^&*(),.?":{}|<>]/.test(value)
+        };
+        setPasswordCriteria(criteria);
+        return criteria;
+    };
+
+    const validateStep = (step) => {
+        const newErrors = {};
+        
+        switch (step) {
+            case 1:
+                if (!formData.name.trim()) newErrors.name = 'El nombre es requerido';
+                if (!formData.email.trim()) newErrors.email = 'El email es requerido';
+                else if (!validateEmail(formData.email)) newErrors.email = 'Email inválido';
+                if (!formData.password) newErrors.password = 'La contraseña es requerida';
+                else if (!Object.values(passwordCriteria).every(Boolean)) {
+                    newErrors.password = 'La contraseña no cumple los requisitos';
+                }
+                if (formData.password !== formData.confirmPassword) {
+                    newErrors.confirmPassword = 'Las contraseñas no coinciden';
+                }
+                break;
+            case 2:
+                if (!formData.restaurantName.trim()) {
+                    newErrors.restaurantName = 'El nombre del restaurante es requerido';
+                }
+                break;
+            case 3:
+                if (!formData.termsAccepted) {
+                    newErrors.terms = 'Debes aceptar los términos y condiciones';
+                }
+                break;
+        }
+        
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
     };
 
     const runStepAnimation = (direction = 1) => {
-        Animated.sequence([
-            Animated.timing(stepAnim, { toValue: 50 * direction, duration: 200, useNativeDriver: true }),
-            Animated.timing(stepAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
-        ]).start();
+        Animated.parallel([
+            Animated.timing(fadeAnim, {
+                toValue: 0,
+                duration: 150,
+                useNativeDriver: true,
+            }),
+            Animated.timing(stepAnim, {
+                toValue: 50 * direction,
+                duration: 150,
+                useNativeDriver: true,
+            }),
+        ]).start(() => {
+            Animated.parallel([
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(stepAnim, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        });
     };
-    
+
     const nextStep = () => {
-        if(currentStep < 3) {
-            runStepAnimation(1);
-            setCurrentStep(s => s + 1);
-        } else {
-            handleRegister();
+        if (validateStep(currentStep)) {
+            if (currentStep < 3) {
+                runStepAnimation(1);
+                setCurrentStep(s => s + 1);
+                if (Platform.OS === 'ios') {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }
+            } else {
+                handleRegister();
+            }
         }
     };
-    
+
     const prevStep = () => {
-        if(currentStep > 1) {
+        if (currentStep > 1) {
             runStepAnimation(-1);
             setCurrentStep(s => s - 1);
         } else {
@@ -109,88 +425,332 @@ const RegisterScreen = () => {
         }
     };
 
-    const handleRegister = () => {
-        console.log("Registro simulado con datos:", formData);
-        alert("¡Registro exitoso! (Simulado)");
-        navigation.navigate('Login');
-    };
+    // Dentro de tu componente RegisterScreen
 
-    const isStep1Valid = formData.name && formData.email && Object.values(passwordCriteria).every(Boolean) && formData.password === formData.confirmPassword;
-    const isStep2Valid = formData.restaurantName;
-    const isStep3Valid = formData.termsAccepted;
-    
+const handleRegister = async () => {
+    // La validación se asegura de que solo lleguemos aquí si todos los datos son correctos
+    if (!validateStep(3)) {
+        return;
+    }
+
+    try {
+        // --- INICIO DE LA LÓGICA DE CONEXIÓN ---
+        
+        // 1. Preparamos los datos que el endpoint '/register' espera
+        const registrationData = {
+            name: formData.name,
+            email: formData.email,
+            password: formData.password,
+            restaurantName: formData.restaurantName,
+            phoneNumber: formData.phoneNumber
+        };
+
+        // 2. Hacemos la llamada a la API usando la IP de tu servidor
+        // NOTA: Reemplaza '192.168.0.200' con la IP real de tu servidor cuando estés en producción.
+        const response = await fetch('https://192.168.0.200/api/auth/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(registrationData),
+        });
+
+        const data = await response.json();
+
+        // 3. Manejamos la respuesta del backend
+        if (!response.ok || !data.success) {
+            // Si el backend devuelve un error (ej. email duplicado), lo mostramos
+            throw new Error(data.message || 'Ocurrió un error durante el registro.');
+        }
+
+        // 4. Si todo sale bien, mostramos una notificación y navegamos al login
+        console.log("Registro exitoso:", data);
+        if (Platform.OS === 'ios') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        
+        // Puedes usar una alerta o un toast para dar feedback al usuario
+        Alert.alert(
+            "¡Registro Exitoso!",
+            "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",
+            [{ text: "OK", onPress: () => navigation.navigate('Login') }]
+        );
+
+        // --- FIN DE LA LÓGICA DE CONEXIÓN ---
+
+    } catch (error) {
+        console.error('Error en registro:', error);
+        // Mostramos el error de la API al usuario
+        Alert.alert("Error de Registro", error.message);
+    }
+};
+
     const renderStep = () => {
         switch (currentStep) {
             case 1:
                 return (
-                    <>
-                        <Text style={styles.stepTitle}>Crea tu Cuenta</Text>
-                        <InputField icon="user" placeholder="Nombre completo" value={formData.name} onChangeText={val => setFormData({...formData, name: val})} />
-                        <InputField icon="mail" placeholder="Correo electrónico" value={formData.email} onChangeText={val => setFormData({...formData, email: val})} keyboardType="email-address"/>
-                        <InputField icon="lock" placeholder="Contraseña" value={formData.password} onChangeText={val => { setFormData({...formData, password: val}); validatePassword(val); }} secureTextEntry />
-                        <InputField icon="lock" placeholder="Confirmar contraseña" value={formData.confirmPassword} onChangeText={val => setFormData({...formData, confirmPassword: val})} secureTextEntry />
-                        <View style={styles.criteriaContainer}>
-                            <PasswordCriteriaItem text="Mínimo 8 caracteres" met={passwordCriteria.length} />
-                            <PasswordCriteriaItem text="Una mayúscula" met={passwordCriteria.uppercase} />
-                            <PasswordCriteriaItem text="Un número" met={passwordCriteria.number} />
+                    <View style={styles.stepContainer}>
+                        <View style={styles.stepHeader}>
+                            <Text style={styles.stepTitle}>Crea tu Cuenta</Text>
+                            <Text style={styles.stepSubtitle}>
+                                Ingresa tus datos personales para comenzar
+                            </Text>
                         </View>
-                    </>
+                        
+                        <View style={styles.inputsContainer}>
+                            <InputField
+                                icon="user"
+                                placeholder="Nombre completo"
+                                value={formData.name}
+                                onChangeText={val => {
+                                    setFormData({...formData, name: val});
+                                    if (errors.name) setErrors({...errors, name: null});
+                                }}
+                                error={errors.name}
+                                success={formData.name.length > 0 && !errors.name}
+                            />
+                            
+                            <InputField
+                                icon="mail"
+                                placeholder="Correo electrónico"
+                                value={formData.email}
+                                onChangeText={val => {
+                                    setFormData({...formData, email: val});
+                                    if (errors.email) setErrors({...errors, email: null});
+                                }}
+                                keyboardType="email-address"
+                                error={errors.email}
+                                success={formData.email.length > 0 && validateEmail(formData.email)}
+                            />
+                            
+                            <InputField
+                                icon="lock"
+                                placeholder="Contraseña"
+                                value={formData.password}
+                                onChangeText={val => {
+                                    setFormData({...formData, password: val});
+                                    validatePassword(val);
+                                    if (errors.password) setErrors({...errors, password: null});
+                                }}
+                                secureTextEntry
+                                error={errors.password}
+                            />
+                            
+                            <InputField
+                                icon="lock"
+                                placeholder="Confirmar contraseña"
+                                value={formData.confirmPassword}
+                                onChangeText={val => {
+                                    setFormData({...formData, confirmPassword: val});
+                                    if (errors.confirmPassword) setErrors({...errors, confirmPassword: null});
+                                }}
+                                secureTextEntry
+                                error={errors.confirmPassword}
+                                success={formData.confirmPassword.length > 0 && formData.password === formData.confirmPassword}
+                            />
+                        </View>
+
+                        <View style={styles.criteriaContainer}>
+                            <Text style={styles.criteriaTitle}>Requisitos de contraseña:</Text>
+                            <PasswordCriteriaItem text="Mínimo 8 caracteres" met={passwordCriteria.length} animated />
+                            <PasswordCriteriaItem text="Una letra mayúscula" met={passwordCriteria.uppercase} animated />
+                            <PasswordCriteriaItem text="Un número" met={passwordCriteria.number} animated />
+                            <PasswordCriteriaItem text="Un carácter especial" met={passwordCriteria.special} animated />
+                        </View>
+                    </View>
                 );
+                
             case 2:
                 return (
-                     <>
-                        <Text style={styles.stepTitle}>Información de tu Negocio</Text>
-                        <InputField icon="coffee" placeholder="Nombre del restaurante" value={formData.restaurantName} onChangeText={val => setFormData({...formData, restaurantName: val})} />
-                        <InputField icon="phone" placeholder="Número de teléfono (Opcional)" value={formData.phoneNumber} onChangeText={val => setFormData({...formData, phoneNumber: val})} keyboardType="phone-pad"/>
-                    </>
+                    <View style={styles.stepContainer}>
+                        <View style={styles.stepHeader}>
+                            <Text style={styles.stepTitle}>Tu Negocio</Text>
+                            <Text style={styles.stepSubtitle}>
+                                Cuéntanos sobre tu restaurante
+                            </Text>
+                        </View>
+                        
+                        <View style={styles.inputsContainer}>
+                            <InputField
+                                icon="coffee"
+                                placeholder="Nombre del restaurante"
+                                value={formData.restaurantName}
+                                onChangeText={val => {
+                                    setFormData({...formData, restaurantName: val});
+                                    if (errors.restaurantName) setErrors({...errors, restaurantName: null});
+                                }}
+                                error={errors.restaurantName}
+                                success={formData.restaurantName.length > 0 && !errors.restaurantName}
+                            />
+                            
+                            <InputField
+                                icon="phone"
+                                placeholder="Número de teléfono (Opcional)"
+                                value={formData.phoneNumber}
+                                onChangeText={val => setFormData({...formData, phoneNumber: val})}
+                                keyboardType="phone-pad"
+                                success={formData.phoneNumber.length > 0}
+                            />
+                        </View>
+
+                        <View style={styles.businessTips}>
+                            <View style={styles.tipItem}>
+                                <Feather name="info" size={16} color="#FDB813" />
+                                <Text style={styles.tipText}>
+                                    Este nombre aparecerá en tu perfil público
+                                </Text>
+                            </View>
+                            <View style={styles.tipItem}>
+                                <Feather name="phone" size={16} color="#FDB813" />
+                                <Text style={styles.tipText}>
+                                    Los clientes podrán contactarte por teléfono
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
                 );
+                
             case 3:
                 return (
-                     <>
-                        <Text style={styles.stepTitle}>Acuerdo y Finalización</Text>
-                        <View style={styles.termsContainer}>
-                            <TouchableOpacity style={styles.termsRow} onPress={() => setFormData({...formData, termsAccepted: !formData.termsAccepted})}>
-                               <View style={[styles.checkbox, formData.termsAccepted && styles.checkboxActive]}>
-                                   {formData.termsAccepted && <Feather name="check" size={14} color="#121212" />}
-                               </View>
-                               <Text style={styles.termsText}>He leído y acepto los </Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => alert("Mostrando Términos y Condiciones...")}>
-                                <Text style={styles.linkText}>Términos y Condiciones</Text>
-                            </TouchableOpacity>
+                    <View style={styles.stepContainer}>
+                        <View style={styles.stepHeader}>
+                            <Text style={styles.stepTitle}>Casi Listo</Text>
+                            <Text style={styles.stepSubtitle}>
+                                Revisa y acepta nuestros términos
+                            </Text>
                         </View>
-                    </>
+
+                        <View style={styles.summaryContainer}>
+                            <View style={styles.summaryItem}>
+                                <Text style={styles.summaryLabel}>Nombre:</Text>
+                                <Text style={styles.summaryValue}>{formData.name}</Text>
+                            </View>
+                            <View style={styles.summaryItem}>
+                                <Text style={styles.summaryLabel}>Email:</Text>
+                                <Text style={styles.summaryValue}>{formData.email}</Text>
+                            </View>
+                            <View style={styles.summaryItem}>
+                                <Text style={styles.summaryLabel}>Restaurante:</Text>
+                                <Text style={styles.summaryValue}>{formData.restaurantName}</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.termsContainer}>
+                            <TouchableOpacity
+                                style={styles.termsRow}
+                                onPress={() => setFormData({...formData, termsAccepted: !formData.termsAccepted})}
+                            >
+                                <View style={[styles.checkbox, formData.termsAccepted && styles.checkboxActive]}>
+                                    {formData.termsAccepted && (
+                                        <Feather name="check" size={14} color="#121212" />
+                                    )}
+                                </View>
+                                <Text style={styles.termsText}>
+                                    He leído y acepto los{' '}
+                                    <Text
+                                        style={styles.linkText}
+                                        onPress={() => {/* Mostrar términos */}}
+                                    >
+                                        Términos y Condiciones
+                                    </Text>
+                                    {' '}y la{' '}
+                                    <Text
+                                        style={styles.linkText}
+                                        onPress={() => {/* Mostrar política */}}
+                                    >
+                                        Política de Privacidad
+                                    </Text>
+                                </Text>
+                            </TouchableOpacity>
+                            {errors.terms && (
+                                <Text style={styles.termsError}>{errors.terms}</Text>
+                            )}
+                        </View>
+                    </View>
                 );
-            default: return null;
+                
+            default:
+                return null;
         }
-    }
-    
-    let isNextDisabled = false;
-    if (currentStep === 1) isNextDisabled = !isStep1Valid;
-    if (currentStep === 2) isNextDisabled = !isStep2Valid;
-    if (currentStep === 3) isNextDisabled = !isStep3Valid;
+    };
+
+    const isStepValid = () => {
+        switch (currentStep) {
+            case 1:
+                return formData.name && 
+                       validateEmail(formData.email) && 
+                       Object.values(passwordCriteria).every(Boolean) && 
+                       formData.password === formData.confirmPassword;
+            case 2:
+                return formData.restaurantName.trim();
+            case 3:
+                return formData.termsAccepted;
+            default:
+                return false;
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" />
-            <LinearGradient colors={['#1e1e1e', '#121212']} style={styles.gradient}>
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                     <View style={styles.header}>
-                         <TouchableOpacity onPress={prevStep} style={styles.backButton}>
+            <StatusBar barStyle="light-content" backgroundColor="#121212" />
+            
+            <LinearGradient
+                colors={['#1a1a1a', '#121212', '#0a0a0a']}
+                locations={[0, 0.5, 1]}
+                style={styles.gradient}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    style={styles.keyboardView}
+                >
+                    {/* Header mejorado */}
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={prevStep} style={styles.backButton}>
                             <Feather name="arrow-left" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
-                        <ProgressStepper currentStep={currentStep} />
-                     </View>
-                     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-                        <Animated.View style={{ opacity: stepAnim.interpolate({inputRange:[-50, 0, 50], outputRange:[0,1,0]}), transform: [{ translateX: stepAnim }]}}>
+                        <ProgressStepper currentStep={currentStep} totalSteps={3} />
+                        <View style={styles.headerSpacer} />
+                    </View>
+
+                    {/* Contenido principal */}
+                    <ScrollView
+                        contentContainerStyle={styles.scrollContainer}
+                        keyboardShouldPersistTaps="handled"
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Animated.View
+                            style={[
+                                styles.contentContainer,
+                                {
+                                    opacity: fadeAnim,
+                                    transform: [{ translateX: stepAnim }]
+                                }
+                            ]}
+                        >
                             {renderStep()}
                         </Animated.View>
-                     </ScrollView>
-                     <View style={styles.footer}>
-                        <TouchableOpacity style={[styles.nextButton, isNextDisabled && styles.nextButtonDisabled]} onPress={nextStep} disabled={isNextDisabled}>
-                            <Text style={styles.nextButtonText}>{currentStep < 3 ? 'Siguiente' : 'Finalizar Registro'}</Text>
-                        </TouchableOpacity>
-                     </View>
+                    </ScrollView>
+
+                    {/* Footer con botones */}
+                    <View style={styles.footer}>
+                        {currentStep > 1 && (
+                            <CustomButton
+                                title="Anterior"
+                                onPress={prevStep}
+                                variant="secondary"
+                                style={styles.backStepButton}
+                            />
+                        )}
+                        <CustomButton
+                            title={currentStep < 3 ? 'Continuar' : 'Crear Cuenta'}
+                            onPress={nextStep}
+                            disabled={!isStepValid()}
+                            style={[
+                                styles.nextStepButton,
+                                currentStep === 1 && styles.fullWidthButton
+                            ]}
+                        />
+                    </View>
                 </KeyboardAvoidingView>
             </LinearGradient>
         </SafeAreaView>
@@ -198,37 +758,297 @@ const RegisterScreen = () => {
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#121212' },
-    gradient: { flex: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 20, paddingBottom: 10 },
-    backButton: { padding: 10, marginRight: 10 },
-    stepperContainer: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    step: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#2a2a2a' },
-    stepActive: { backgroundColor: '#FDB813', borderColor: '#FDB813' },
-    stepText: { color: '#888', fontWeight: 'bold' },
-    stepTextActive: { color: '#121212' },
-    stepLine: { flex: 1, height: 2, backgroundColor: '#2a2a2a' },
-    stepLineActive: { backgroundColor: '#FDB813' },
-    scrollContainer: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24 },
-    stepTitle: { fontSize: 28, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center', marginBottom: 32 },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#2a2a2a', borderRadius: 12, paddingHorizontal: 16, marginBottom: 16, borderWidth: 1, borderColor: 'transparent' },
-    inputContainerFocused: { borderColor: '#FDB813' },
-    inputIcon: { marginRight: 12 },
-    input: { flex: 1, color: '#FFFFFF', paddingVertical: 16, fontSize: 16 },
-    criteriaContainer: { paddingHorizontal: 8, marginVertical: 8 },
-    criteriaItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    criteriaText: { color: '#888', marginLeft: 8 },
-    criteriaMet: { color: '#10B981' },
-    termsContainer: { alignItems: 'center', marginTop: 24, paddingHorizontal: 16 },
-    termsRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8},
-    checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: '#888', justifyContent: 'center', alignItems: 'center'},
-    checkboxActive: { borderColor: '#FDB813', backgroundColor: '#FDB813' },
-    termsText: { color: '#A9A9A9', fontSize: 16, marginLeft: 12 },
-    linkText: { color: '#FDB813', fontSize: 16, fontWeight: 'bold', textDecorationLine: 'underline' },
-    footer: { padding: 24, paddingTop: 12, backgroundColor: '#1e1e1e', borderTopWidth: 1, borderTopColor: '#2a2a2a' },
-    nextButton: { backgroundColor: '#FDB813', paddingVertical: 18, borderRadius: 12, alignItems: 'center' },
-    nextButtonDisabled: { backgroundColor: '#2a2a2a' },
-    nextButtonText: { color: '#121212', fontSize: 18, fontWeight: 'bold' },
+    container: {
+        flex: 1,
+        backgroundColor: '#121212',
+    },
+    gradient: {
+        flex: 1,
+    },
+    keyboardView: {
+        flex: 1,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 20,
+        paddingBottom: 20,
+    },
+    backButton: {
+        padding: 8,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    headerSpacer: {
+        width: 40,
+    },
+    stepperContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        paddingHorizontal: 20,
+    },
+    step: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#2a2a2a',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#2a2a2a',
+    },
+    stepText: {
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    stepLine: {
+        flex: 1,
+        height: 2,
+        backgroundColor: '#2a2a2a',
+        marginHorizontal: 8,
+    },
+    scrollContainer: {
+        flexGrow: 1,
+        paddingHorizontal: 24,
+    },
+    contentContainer: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    stepContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        minHeight: 400,
+    },
+    stepHeader: {
+        alignItems: 'center',
+        marginBottom: 32,
+    },
+    stepTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#FFFFFF',
+        textAlign: 'center',
+        marginBottom: 8,
+    },
+    stepSubtitle: {
+        fontSize: 16,
+        color: '#A0A0A0',
+        textAlign: 'center',
+        paddingHorizontal: 20,
+    },
+    inputsContainer: {
+        marginBottom: 24,
+    },
+    inputWrapper: {
+        marginBottom: 20,
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: 'transparent',
+        minHeight: 60,
+    },
+    inputIcon: {
+        marginRight: 12,
+    },
+    inputContent: {
+        flex: 1,
+        position: 'relative',
+    },
+    input: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        paddingVertical: 8,
+    },
+    errorContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 8,
+        paddingHorizontal: 16,
+    },
+    errorText: {
+        color: '#FF6B6B',
+        fontSize: 14,
+        marginLeft: 6,
+    },
+    criteriaContainer: {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 12,
+        padding: 16,
+        marginTop: 8,
+    },
+    criteriaTitle: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 12,
+    },
+    criteriaItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+        paddingVertical: 2,
+    },
+    criteriaText: {
+        color: '#888',
+        marginLeft: 10,
+        fontSize: 14,
+    },
+    criteriaMet: {
+        color: '#10B981',
+    },
+    businessTips: {
+        backgroundColor: 'rgba(253, 184, 19, 0.1)',
+        borderRadius: 12,
+        padding: 16,
+        marginTop: 16,
+    },
+    tipItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    tipText: {
+        color: '#E0E0E0',
+        fontSize: 14,
+        marginLeft: 8,
+        flex: 1,
+    },
+    summaryContainer: {
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 16,
+        padding: 20,
+        marginBottom: 24,
+    },
+    summaryItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    },
+    summaryLabel: {
+        color: '#A0A0A0',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    summaryValue: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '600',
+        flex: 1,
+        textAlign: 'right',
+        marginLeft: 16,
+    },
+    termsContainer: {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: 12,
+        padding: 16,
+    },
+    termsRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: 8,
+        borderWidth: 2,
+        borderColor: '#666',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    checkboxActive: {
+        borderColor: '#FDB813',
+        backgroundColor: '#FDB813',
+    },
+    termsText: {
+        color: '#E0E0E0',
+        fontSize: 15,
+        lineHeight: 22,
+        marginLeft: 12,
+        flex: 1,
+    },
+    linkText: {
+        color: '#FDB813',
+        fontWeight: '600',
+        textDecorationLine: 'underline',
+    },
+    termsError: {
+        color: '#FF6B6B',
+        fontSize: 14,
+        marginTop: 12,
+        textAlign: 'center',
+    },
+    footer: {
+        flexDirection: 'row',
+        padding: 24,
+        paddingTop: 16,
+        backgroundColor: 'rgba(18, 18, 18, 0.95)',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        gap: 12,
+    },
+    primaryButton: {
+        backgroundColor: '#FDB813',
+        paddingVertical: 18,
+        paddingHorizontal: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#FDB813',
+        shadowOffset: {
+            width: 0,
+            height: 4,
+        },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    secondaryButton: {
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        paddingVertical: 18,
+        paddingHorizontal: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    buttonDisabled: {
+        opacity: 0.5,
+        shadowOpacity: 0,
+        elevation: 0,
+    },
+    primaryButtonText: {
+        color: '#121212',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    secondaryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    backStepButton: {
+        flex: 1,
+    },
+    nextStepButton: {
+        flex: 2,
+    },
+    fullWidthButton: {
+        flex: 1,
+    },
 });
 
 export default RegisterScreen;
