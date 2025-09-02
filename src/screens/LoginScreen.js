@@ -424,35 +424,47 @@ const LoginScreen = () => {
     };
 
     const handleLogin = async () => {
-        if (!validateForm()) return;
+    if (!validateForm()) return;
 
-        setLoading(true);
-        setFormErrors({});
+    setLoading(true);
+    setFormErrors({});
 
-        try {
-            // Simulación de autenticación
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
-            if (formData.email.toLowerCase() === 'test@nextmanager.com' && formData.password === '123456') {
-                if (Platform.OS === 'ios') {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                }
-                console.log('Login exitoso (simulado)');
-                navigation.replace('Dashboard');
-            } else {
-                setFormErrors({ 
-                    general: 'Credenciales incorrectas. Verifica tu email y contraseña.' 
-                });
-                if (Platform.OS === 'ios') {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-                }
-            }
-        } catch (error) {
-            setFormErrors({ general: 'Error de conexión. Intenta nuevamente.' });
-        } finally {
-            setLoading(false);
+    try {
+        // 1. Llamamos a la función login de nuestro AuthContext.
+        // Ésta se encarga de llamar a la API, guardar los tokens de forma segura
+        // y obtener los datos completos del usuario.
+        const loginResponse = await login(formData.email, formData.password);
+
+        // 2. Revisamos el 'status' que devuelve el endpoint de login
+        const userStatus = loginResponse.status;
+        
+        if (Platform.OS === 'ios') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-    };
+
+        // 3. Lógica de Redirección Inteligente
+        if (!userStatus.hasPlan) {
+            // Si no tiene plan, lo mandamos a seleccionar uno.
+            navigation.replace('PlanSelection');
+        } else if (!userStatus.hasRestaurant) {
+            // Si tiene plan pero no ha configurado su restaurante, lo mandamos a configurarlo.
+            navigation.replace('RestaurantSetup');
+        } else {
+            // Si tiene todo, lo mandamos al dashboard principal.
+            navigation.replace('Dashboard');
+        }
+
+    } catch (error) {
+        const errorMessage = error.response?.data?.message || 'Credenciales inválidas o error de conexión.';
+        setFormErrors({ general: errorMessage });
+        
+        if (Platform.OS === 'ios') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+    } finally {
+        setLoading(false);
+    }
+};
 
     const handleSocialLogin = async (provider) => {
         setSocialLoading(provider);
