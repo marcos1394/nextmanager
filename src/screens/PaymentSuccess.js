@@ -303,15 +303,8 @@ const PaymentSuccessScreen = () => {
     }, []);
 
     // Usamos fallback por si se accede a la pantalla sin parámetros
-    const { selectedPlan } = route.params || {
-        selectedPlan: {
-            product: 'Paquete Completo',
-            name: 'Plan Anual',
-            price: 7500,
-            period: 'annually',
-            planId: 'completo'
-        }
-    };
+    const { selectedPlan } = route.params;
+
 
     const handlePrimaryAction = async () => {
         if (isNavigating) return;

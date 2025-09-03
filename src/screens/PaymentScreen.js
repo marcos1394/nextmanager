@@ -421,68 +421,46 @@ const PaymentGatewayScreen = () => {
     };
 
     const handlePayment = async () => {
-    // 1. Prevenir múltiples clics
     if (isProcessing) return;
 
-    // 2. Extraer datos necesarios del plan y del usuario
     const planId = selectedPlan?.planId;
     const billingCycle = selectedPlan?.period;
     const userId = user?.id;
 
-    // 3. Validar que tengamos toda la información
     if (!planId || !billingCycle || !userId) {
-        Alert.alert("Error", "Falta información del plan o del usuario para poder continuar. Por favor, vuelve a intentarlo.");
+        Alert.alert("Error", "Falta información del plan o del usuario.");
         return;
     }
 
-    // 4. Iniciar estado de carga y feedback visual/táctil
     setIsProcessing(true);
     setShowProcessingModal(true);
-    if (Platform.OS === 'ios') {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    
+
     try {
-        // --- INICIO DE LA LÓGICA DE PAGO REAL ---
-        
-        // 5. Llamar a nuestro backend para crear la preferencia de pago
-        console.log(`[Payment] Creando preferencia para plan: ${planId}, ciclo: ${billingCycle}`);
+        // Llamamos a nuestro backend para crear la preferencia de pago
         const response = await api.post('/payments/create-preference', {
-            planId: planId,
-            billingCycle: billingCycle,
-            userId: userId,
+            planId,
+            billingCycle,
+            userId,
             origin: 'mobile_app_onboarding'
         });
 
-        // 6. Verificar la respuesta del backend
         if (response.data.success && response.data.init_point) {
             const paymentUrl = response.data.init_point;
-            console.log('[Payment] Redirigiendo a Mercado Pago:', paymentUrl);
-
-            // 7. Abrir la URL de pago en el navegador externo del teléfono
             const supported = await Linking.canOpenURL(paymentUrl);
             if (supported) {
                 await Linking.openURL(paymentUrl);
             } else {
                 throw new Error(`No se puede abrir esta URL: ${paymentUrl}`);
             }
-
-            // 8. Navegar a una pantalla de espera mientras el pago se procesa externamente
-            navigation.replace('PaymentPending', { selectedPlan });
-
+            // Pasamos el MISMO objeto 'selectedPlan' a la pantalla de éxito
+            navigation.navigate('PaymentSuccess', { selectedPlan });
         } else {
-            throw new Error(response.data.message || 'No se pudo obtener la URL de pago desde el servidor.');
+            throw new Error(response.data.message || 'No se pudo obtener la URL de pago.');
         }
-
     } catch (error) {
-        const errorMessage = error.response?.data?.message || 'Error al iniciar el proceso de pago. Inténtalo de nuevo.';
-        console.error('[Payment] Error:', error);
-        if (Platform.OS === 'ios') {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        }
+        const errorMessage = error.response?.data?.message || 'Error al iniciar el proceso de pago.';
         Alert.alert('Error en el pago', errorMessage);
     } finally {
-        // 9. Limpiar el estado de carga al finalizar
         setIsProcessing(false);
         setShowProcessingModal(false);
     }

@@ -571,9 +571,18 @@ const PlanSelectionScreen = () => {
         ]).start();
     }, []);
 
-    const handlePlanSelect = (selectedPlan) => {
-        navigation.navigate('PaymentGateway', { selectedPlan });
+    const handlePlanSelect = (plan) => {
+    // Construimos un objeto limpio con los datos exactos que necesitamos
+    const selectedData = {
+        name: plan.name,
+        price: billingCycle === 'annually' ? plan.price_annually : plan.price_monthly,
+        period: billingCycle,
+        planId: plan.id, // El ID real del plan de la base de datos
+        features: plan.features
     };
+    // Pasamos este nuevo objeto a la siguiente pantalla
+    navigation.navigate('PaymentGateway', { selectedPlan: selectedData });
+};
 
     const renderPlanCard = ({ item, index }) => (
         <PlanCard
