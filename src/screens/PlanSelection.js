@@ -24,75 +24,51 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 40;
 const CARD_SPACING = 20;
 
-// --- DATOS MEJORADOS CON MÁS CONTEXTO ---
-const plansData = [
-    {
-        id: 'factura',
-        name: 'NexFactura',
-        tagline: 'Esencial',
-        description: 'Perfecto para pequeños negocios que necesitan facturación simple y efectiva',
-        price: { monthly: 450, annually: 4150 },
-        originalPrice: { monthly: null, annually: 4875 },
-        features: [
-            { text: 'Facturación automática', icon: 'receipt' },
-            { text: 'Portal de auto-facturación', icon: 'globe' },
-            { text: 'Reportes básicos', icon: 'bar-chart' },
-            { text: 'Soporte estándar', icon: 'help-circle' },
-            { text: 'Hasta 500 facturas/mes', icon: 'file-text' },
-        ],
-        limitations: ['Sin análisis avanzados', 'Soporte en horario laboral'],
-        color: '#6366F1',
-        gradient: ['#6366F1', '#4F46E5'],
-        isHighlighted: false,
-        badge: null,
-        recommended: 'startups',
-    },
-    {
-        id: 'completo',
-        name: 'Paquete Completo',
-        tagline: 'Recomendado',
-        description: 'La solución integral con todas las herramientas para hacer crecer tu negocio',
-        price: { monthly: 800, annually: 7500 },
-        originalPrice: { monthly: null, annually: 8800 },
-        features: [
-            { text: 'Todo lo de NexFactura', icon: 'check-circle' },
-            { text: 'Dashboard en tiempo real', icon: 'activity' },
-            { text: 'Análisis predictivo', icon: 'trending-up' },
-            { text: 'Soporte prioritario 24/7', icon: 'headphones' },
-            { text: 'Capacitación personalizada', icon: 'users' },
-            { text: 'Facturas ilimitadas', icon: 'infinity' },
-            { text: 'API personalizada', icon: 'code' },
-        ],
-        limitations: [],
-        color: '#FDB813',
-        gradient: ['#FDB813', '#F59E0B'],
-        isHighlighted: true,
-        badge: 'MÁS POPULAR',
-        recommended: 'growing_business',
-    },
-    {
-        id: 'manager',
-        name: 'NextManager',
-        tagline: 'Analítica',
-        description: 'Diseñado para gerentes que necesitan insights profundos de sus ventas',
-        price: { monthly: 430, annually: 3950 },
-        originalPrice: { monthly: null, annually: 4645 },
-        features: [
-            { text: 'Dashboard avanzado', icon: 'pie-chart' },
-            { text: 'Análisis de tendencias', icon: 'trending-up' },
-            { text: 'Exportación avanzada', icon: 'download' },
-            { text: 'Soporte especializado', icon: 'user-check' },
-            { text: 'Hasta 1000 reportes/mes', icon: 'file-minus' },
-        ],
-        limitations: ['Sin facturación automática', 'No incluye capacitación'],
-        color: '#10B981',
-        gradient: ['#10B981', '#059669'],
-        isHighlighted: false,
-        badge: null,
-        recommended: 'analysts',
-    },
-];
+useEffect(() => {
+    // --- LÓGICA DE CARGA DE DATOS ---
+    const fetchPlans = async () => {
+        try {
+            setIsLoading(true);
+            setError(null); // Limpiar errores anteriores
+            
+            // NOTA: Usa la IP de tu servidor para pruebas. En producción, será tu dominio.
+            const response = await fetch('https://192.168.0.200/api/payments/plans');
+            const data = await response.json();
 
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'No se pudieron cargar los planes.');
+            }
+
+            setPlans(data.plans);
+
+        } catch (err) {
+            console.error("Error al cargar los planes:", err);
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    // Llamamos a la función para que se ejecute
+    fetchPlans();
+
+    // --- LÓGICA DE ANIMACIÓN (sin cambios) ---
+    // La animación de entrada del header se ejecuta en paralelo a la carga de datos
+    Animated.parallel([
+        Animated.timing(headerFadeAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+        }),
+        Animated.spring(headerSlideAnim, {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            useNativeDriver: true,
+        }),
+    ]).start();
+
+}, []); // El array de dependencias vacío asegura que se ejecute solo una vez al cargar la pantalla
 // --- COMPONENTES UI MEJORADOS ---
 
 const AnimatedBillingToggle = ({ billingCycle, setBillingCycle }) => {
@@ -569,6 +545,9 @@ const PlanSelectionScreen = () => {
     const [billingCycle, setBillingCycle] = useState('annually');
     const [showComparison, setShowComparison] = useState(false);
     const flatListRef = useRef(null);
+    const [plans, setPlans] = useState([]); // Para guardar los planes de la API
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
     const scrollX = useRef(new Animated.Value(0)).current;
     
     // Animaciones
@@ -651,130 +630,148 @@ const PlanSelectionScreen = () => {
                     setBillingCycle={setBillingCycle} 
                 />
 
-                <ScrollView 
-                    style={styles.scrollView}
-                    showsVerticalScrollIndicator={false}
-                    bounces={true}
-                    scrollEventThrottle={16}
-                >
-                    {/* Plans Carousel */}
-                    <View style={styles.carouselSection}>
-                        <FlatList
-                            ref={flatListRef}
-                            data={plansData}
-                            renderItem={renderPlanCard}
-                            keyExtractor={item => item.id}
-                            horizontal
-                            pagingEnabled
-                            showsHorizontalScrollIndicator={false}
-                            snapToInterval={CARD_WIDTH + CARD_SPACING}
-                            decelerationRate="fast"
-                            contentContainerStyle={styles.carouselContent}
-                            onScroll={handleScroll}
-                            scrollEventThrottle={16}
-                            initialScrollIndex={1} // Centrar en el plan recomendado
-                        />
-                        
-                        {/* Dots Indicator */}
-                        <View style={styles.dotsContainer}>
-                            {plansData.map((_, index) => {
-                                const inputRange = [
-                                    (index - 1) * (CARD_WIDTH + CARD_SPACING),
-                                    index * (CARD_WIDTH + CARD_SPACING),
-                                    (index + 1) * (CARD_WIDTH + CARD_SPACING),
-                                ];
-                                
-                                const dotOpacity = scrollX.interpolate({
-                                    inputRange,
-                                    outputRange: [0.3, 1, 0.3],
-                                    extrapolate: 'clamp',
-                                });
-                                
-                                const dotScale = scrollX.interpolate({
-                                    inputRange,
-                                    outputRange: [0.8, 1.3, 0.8],
-                                    extrapolate: 'clamp',
-                                });
+               // En tu componente PlanSelectionScreen, reemplaza el bloque de renderizado existente con este:
 
-                                return (
-                                    <Animated.View
-                                        key={index}
-                                        style={[
-                                            styles.dot,
-                                            {
-                                                opacity: dotOpacity,
-                                                transform: [{ scale: dotScale }]
-                                            }
-                                        ]}
-                                    />
-                                );
-                            })}
-                        </View>
-                    </View>
+{isLoading && (
+    <View style={styles.centeredContainer}>
+        <ActivityIndicator size="large" color="#FDB813" />
+        <Text style={styles.loadingText}>Cargando planes...</Text>
+    </View>
+)}
 
-                    {/* Comparison Toggle */}
-                    <TouchableOpacity
-                        style={styles.comparisonToggle}
-                        onPress={() => setShowComparison(!showComparison)}
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.comparisonToggleText}>
-                            {showComparison ? 'Ocultar' : 'Ver'} comparación detallada
-                        </Text>
+{error && (
+    <View style={styles.centeredContainer}>
+        <Text style={styles.errorText}>Error: {error}</Text>
+        {/* Opcional: Añadir un botón para reintentar */}
+    </View>
+)}
+
+{!isLoading && !error && (
+    <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        bounces={true}
+        scrollEventThrottle={16}
+    >
+        {/* Plans Carousel */}
+        <View style={styles.carouselSection}>
+            <FlatList
+                ref={flatListRef}
+                data={plans}
+                renderItem={renderPlanCard}
+                keyExtractor={item => item.id}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={CARD_WIDTH + CARD_SPACING}
+                decelerationRate="fast"
+                contentContainerStyle={styles.carouselContent}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
+                initialScrollIndex={1} // Centrar en el plan recomendado
+            />
+            
+            {/* Dots Indicator */}
+            <View style={styles.dotsContainer}>
+                {plans.map((_, index) => {
+                    const inputRange = [
+                        (index - 1) * (CARD_WIDTH + CARD_SPACING),
+                        index * (CARD_WIDTH + CARD_SPACING),
+                        (index + 1) * (CARD_WIDTH + CARD_SPACING),
+                    ];
+                    
+                    const dotOpacity = scrollX.interpolate({
+                        inputRange,
+                        outputRange: [0.3, 1, 0.3],
+                        extrapolate: 'clamp',
+                    });
+                    
+                    const dotScale = scrollX.interpolate({
+                        inputRange,
+                        outputRange: [0.8, 1.3, 0.8],
+                        extrapolate: 'clamp',
+                    });
+
+                    return (
                         <Animated.View
-                            style={{
-                                transform: [{
-                                    rotate: showComparison ? '180deg' : '0deg'
-                                }]
-                            }}
-                        >
-                            <Feather name="chevron-down" size={20} color="#FDB813" />
-                        </Animated.View>
-                    </TouchableOpacity>
-
-                    {/* Detailed Comparison */}
-                    {showComparison && (
-                        <PlanComparison 
-                            plans={plansData} 
-                            billingCycle={billingCycle} 
+                            key={index}
+                            style={[
+                                styles.dot,
+                                {
+                                    opacity: dotOpacity,
+                                    transform: [{ scale: dotScale }]
+                                }
+                            ]}
                         />
-                    )}
+                    );
+                })}
+            </View>
+        </View>
 
-                    {/* Help Section */}
-                    <View style={styles.helpSection}>
-                        <View style={styles.helpHeader}>
-                            <Feather name="help-circle" size={24} color="#FDB813" />
-                            <Text style={styles.helpTitle}>¿Necesitas ayuda para decidir?</Text>
-                        </View>
-                        <Text style={styles.helpText}>
-                            Nuestro equipo está aquí para ayudarte a encontrar el plan perfecto para tu negocio
-                        </Text>
-                        
-                        <View style={styles.helpButtons}>
-                            <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
-                                <LinearGradient
-                                    colors={['rgba(253, 184, 19, 0.1)', 'rgba(253, 184, 19, 0.05)']}
-                                    style={styles.helpButtonGradient}
-                                >
-                                    <Feather name="message-circle" size={20} color="#FDB813" />
-                                    <Text style={styles.helpButtonText}>Chat en vivo</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                            
-                            <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
-                                <LinearGradient
-                                    colors={['rgba(253, 184, 19, 0.1)', 'rgba(253, 184, 19, 0.05)']}
-                                    style={styles.helpButtonGradient}
-                                >
-                                    <Feather name="phone" size={20} color="#FDB813" />
-                                    <Text style={styles.helpButtonText}>Llamar ahora</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+        {/* Comparison Toggle */}
+        <TouchableOpacity
+            style={styles.comparisonToggle}
+            onPress={() => setShowComparison(!showComparison)}
+            activeOpacity={0.8}
+        >
+            <Text style={styles.comparisonToggleText}>
+                {showComparison ? 'Ocultar' : 'Ver'} comparación detallada
+            </Text>
+            <Animated.View
+                style={{
+                    transform: [{
+                        rotate: showComparison ? '180deg' : '0deg'
+                    }]
+                }}
+            >
+                <Feather name="chevron-down" size={20} color="#FDB813" />
+            </Animated.View>
+        </TouchableOpacity>
 
-                    <View style={styles.bottomSpacing} />
-                </ScrollView>
+        {/* Detailed Comparison */}
+        {showComparison && (
+            <PlanComparison 
+                plans={plans} 
+                billingCycle={billingCycle} 
+            />
+        )}
+
+        {/* Help Section */}
+        <View style={styles.helpSection}>
+            <View style={styles.helpHeader}>
+                <Feather name="help-circle" size={24} color="#FDB813" />
+                <Text style={styles.helpTitle}>¿Necesitas ayuda para decidir?</Text>
+            </View>
+            <Text style={styles.helpText}>
+                Nuestro equipo está aquí para ayudarte a encontrar el plan perfecto para tu negocio
+            </Text>
+            
+            <View style={styles.helpButtons}>
+                <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
+                    <LinearGradient
+                        colors={['rgba(253, 184, 19, 0.1)', 'rgba(253, 184, 19, 0.05)']}
+                        style={styles.helpButtonGradient}
+                    >
+                        <Feather name="message-circle" size={20} color="#FDB813" />
+                        <Text style={styles.helpButtonText}>Chat en vivo</Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
+                    <LinearGradient
+                        colors={['rgba(253, 184, 19, 0.1)', 'rgba(253, 184, 19, 0.05)']}
+                        style={styles.helpButtonGradient}
+                    >
+                        <Feather name="phone" size={20} color="#FDB813" />
+                        <Text style={styles.helpButtonText}>Llamar ahora</Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+            </View>
+        </View>
+
+        <View style={styles.bottomSpacing} />
+    </ScrollView>
+)}
             </LinearGradient>
         </SafeAreaView>
     );
