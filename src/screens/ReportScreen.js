@@ -17,59 +17,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
-
+import { Dimensions } from 'react-native';
 const { width: screenWidth } = Dimensions.get('window');
 
-// --- DATOS DE MUESTRA MEJORADOS ---
-const mockReportData = {
-    sales: {
-        kpis: { 
-            total: 125430, 
-            transactions: 852, 
-            average: 147.22,
-            growth: 12.5,
-            topProduct: 'Café Especial'
-        },
-        chartData: [
-            {value: 3500, label: 'Lun', labelTextStyle: {color: '#888', fontSize: 10}},
-            {value: 4200, label: 'Mar', labelTextStyle: {color: '#888', fontSize: 10}},
-            {value: 5000, label: 'Mié', labelTextStyle: {color: '#888', fontSize: 10}},
-            {value: 4800, label: 'Jue', labelTextStyle: {color: '#888', fontSize: 10}},
-            {value: 6800, label: 'Vie', labelTextStyle: {color: '#888', fontSize: 10}},
-            {value: 8500, label: 'Sáb', labelTextStyle: {color: '#888', fontSize: 10}},
-            {value: 7900, label: 'Dom', labelTextStyle: {color: '#888', fontSize: 10}}
-        ],
-        lineData: [
-            {value: 3500, dataPointText: '3.5K'},
-            {value: 4200, dataPointText: '4.2K'},
-            {value: 5000, dataPointText: '5K'},
-            {value: 4800, dataPointText: '4.8K'},
-            {value: 6800, dataPointText: '6.8K'},
-            {value: 8500, dataPointText: '8.5K'},
-            {value: 7900, dataPointText: '7.9K'}
-        ],
-        tableData: [
-            { id: '1', day: 'Sábado, 14 Jun', total: 8500, transactions: 75, growth: 15.2 },
-            { id: '2', day: 'Viernes, 13 Jun', total: 6800, transactions: 62, growth: 8.7 },
-            { id: '3', day: 'Jueves, 12 Jun', total: 4800, transactions: 55, growth: -2.1 },
-            { id: '4', day: 'Miércoles, 11 Jun', total: 5000, transactions: 48, growth: 12.3 },
-        ]
-    },
-    products: {
-        kpis: { 
-            total: 234, 
-            topSelling: 'Café Americano', 
-            revenue: 89240,
-            categories: 8
-        },
-        pieData: [
-            {value: 40, color: '#FDB813', text: '40%', label: 'Café'},
-            {value: 25, color: '#22C55E', text: '25%', label: 'Postres'},
-            {value: 20, color: '#3B82F6', text: '20%', label: 'Bebidas'},
-            {value: 15, color: '#8B5CF6', text: '15%', label: 'Snacks'}
-        ]
-    }
-};
 
 // --- COMPONENTES MEJORADOS ---
 const AnimatedCard = ({ children, style, delay = 0 }) => {
@@ -417,18 +367,48 @@ const ReportsScreen = () => {
 
                             {/* Gráfico Principal */}
                             <ChartContainer 
-                                title={`${activeReport === 'sales' ? 'Ventas' : 'Datos'} de ${activeDateRange}`}
-                                delay={300}
-                            >
-                                {/* Aquí iría tu lógica de gráficos, ej:
-                                {chartType === 'bar' ? (
-                                    <BarChart data={data.chartData} />
-                                ) : (
-                                    <LineChart data={data.lineData} />
-                                )}
-                                */}
-                                <Text style={{color: 'white'}}>Espacio para Gráfico</Text>
-                            </ChartContainer>
+    title={`${activeReport === 'sales' ? 'Ventas' : 'Datos'} de ${activeDateRange}`}
+    delay={300}
+>
+    {chartType === 'bar' ? (
+        <BarChart
+            data={data.chartData}
+            width={screenWidth - 80} // screenWidth obtenido de Dimensions
+            height={220}
+            barWidth={26}
+            spacing={20}
+            roundedTop
+            frontColor={'#FDB813'}
+            gradientColor={'#FFAA00'}
+            yAxisTextStyle={{color: '#888', fontSize: 12}}
+            xAxisLabelTextStyle={{color: '#888', fontSize: 10}}
+            noOfSections={4}
+            yAxisThickness={0}
+            xAxisThickness={1}
+            xAxisColor={'#333'}
+            hideRules
+        />
+    ) : (
+        <LineChart
+            data={data.chartData} // Usamos la misma data formateada
+            width={screenWidth - 80}
+            height={220}
+            spacing={45}
+            color="#FDB813"
+            thickness={3}
+            dataPointsHeight={6}
+            dataPointsWidth={6}
+            dataPointsColor="#FDB813"
+            yAxisTextStyle={{color: '#888', fontSize: 12}}
+            noOfSections={4}
+            yAxisThickness={0}
+            xAxisThickness={1}
+            xAxisColor={'#333'}
+            hideRules
+            curved
+        />
+    )}
+</ChartContainer>
 
                             {/* Tabla de Datos */}
                             {activeReport === 'sales' && data.tableData && (
