@@ -363,6 +363,50 @@ const PaymentSuccessScreen = () => {
         
     }, [purchaseId, verifySession]); // Dependencias correctas
 
+    // --- RENDERIZADO CONDICIONAL ---
+
+    // Estado 1: Verificando
+    if (isVerifying) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <LinearGradient colors={['#1a1a1a', '#121212', '#0f0f0f']} style={styles.gradient}>
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                        <ActivityIndicator size="large" color="#FDB813" />
+                        <Text style={{ color: 'white', fontSize: 18, marginTop: 20, textAlign: 'center' }}>
+                            Verificando tu pago...
+                        </Text>
+                        <Text style={{ color: '#A0A0A0', fontSize: 14, marginTop: 10, textAlign: 'center' }}>
+                            Estamos confirmando la transacción con el banco. Esto puede tardar unos segundos.
+                        </Text>
+                    </View>
+                </LinearGradient>
+            </SafeAreaView>
+        );
+    }
+    
+    // Estado 2: Error (Opcional, si quieres un estado de error)
+    if (paymentError && !isVerifying) {
+         return (
+             <SafeAreaView style={styles.container}>
+                 <LinearGradient colors={['#1a1a1a', '#121212', '#0f0f0f']} style={styles.gradient}>
+                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                         <MaterialCommunityIcons name="alert-circle-outline" size={60} color="#FF6B6B" />
+                         <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', marginTop: 20, textAlign: 'center' }}>
+                             Pago en Proceso
+                         </Text>
+                         <Text style={{ color: '#A0A0A0', marginTop: 10, textAlign: 'center' }}>
+                             {paymentError}
+                         </Text>
+                         {/* Puedes añadir botones para reintentar o ir al dashboard */}
+                         <TouchableOpacity onPress={() => navigation.navigate('Dashboard')}>
+                             <Text style={{ color: '#FDB813', marginTop: 20 }}>Ir al Dashboard</Text>
+                         </TouchableOpacity>
+                     </View>
+                 </LinearGradient>
+             </SafeAreaView>
+         );
+    }
+
     // Usamos fallback por si se accede a la pantalla sin parámetros
 
 
