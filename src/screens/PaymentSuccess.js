@@ -16,6 +16,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { getPurchaseStatus } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 
 
@@ -284,26 +286,84 @@ const FeatureHighlight = ({ icon, title, description, delay = 0 }) => {
 
 // --- COMPONENTE PRINCIPAL ---
 const PaymentSuccessScreen = () => {
-    const navigation = useNavigation();
+   const navigation = useNavigation();
     const route = useRoute();
-    const [isNavigating, setIsNavigating] = useState(false);
+    const { verifySession } = useAuth(); // Para forzar la actualización del usuario
 
-    // Animaciones para los botones
+    // --- NUEVOS ESTADOS ---
+    const [isVerifying, setIsVerifying] = useState(true);
+    const [paymentError, setPaymentError] = useState(null);
+    
+    const [isNavigating, setIsNavigating] = useState(false);
     const buttonScaleAnim = useRef(new Animated.Value(1)).current;
     const contentFadeAnim = useRef(new Animated.Value(0)).current;
 
+    const { selectedPlan, purchaseId } = route.params || {};
+
+    // Animaciones para los botones
+
+// --- LÓGICA DE VERIFICACIÓN DE PAGO (POLLING) ---
     useEffect(() => {
-        // Animación de entrada del contenido
-        Animated.timing(contentFadeAnim, {
-            toValue: 1,
-            duration: 800,
-            delay: 1000,
-            useNativeDriver: true,
-        }).start();
-    }, []);
+        if (!purchaseId) {
+            setPaymentError('Error: No se recibió un ID de compra válido.');
+            setIsVerifying(false);
+            return;
+        }
+
+        let attempts = 0;
+        const maxAttempts = 10; // 10 intentos (30 segundos)
+        let intervalId;
+
+        const checkStatus = async () => {
+            attempts++;
+            try {
+                console.log(`[PaymentSuccess] Verificando estado... (Intento ${attempts})`);
+                const response = await getPurchaseStatus(purchaseId);
+
+                if (response.success && response.status === 'active') {
+                    // ¡ÉXITO!
+                    clearInterval(intervalId);
+                    setIsVerifying(false);
+                    setPaymentError(null);
+                    
+                    // Forzamos al AuthContext a recargar los datos del usuario
+                    await verifySession();
+                    
+                    // Inicia la animación de entrada
+                    Animated.timing(contentFadeAnim, {
+                        toValue: 1,
+                        duration: 800,
+                        delay: 500, // Un pequeño retraso post-verificación
+                        useNativeDriver: true,
+                    }).start();
+
+                } else if (attempts >= maxAttempts) {
+                    // Se acabó el tiempo, pero no es un error fatal
+                    clearInterval(intervalId);
+                    setIsVerifying(false);
+                    setPaymentError('Tu pago está tardando en procesarse. Lo verificaremos en segundo plano. Ya puedes continuar.');
+                    // Aún así, iniciamos la animación de "éxito"
+                    Animated.timing(contentFadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
+                }
+                // Si sigue 'pending_payment', no hace nada y espera al siguiente ciclo
+                
+            } catch (error) {
+                clearInterval(intervalId);
+                setPaymentError('Hubo un error al verificar tu pago. Por favor, contacta a soporte.');
+                setIsVerifying(false);
+            }
+        };
+
+        // Inicia el sondeo: llama a checkStatus inmediatamente y luego cada 3 segundos
+        checkStatus();
+        intervalId = setInterval(checkStatus, 3000);
+
+        // Limpia el intervalo si el usuario sale de la pantalla
+        return () => clearInterval(intervalId);
+        
+    }, [purchaseId, verifySession]); // Dependencias correctas
 
     // Usamos fallback por si se accede a la pantalla sin parámetros
-    const { selectedPlan } = route.params;
 
 
     const handlePrimaryAction = async () => {
