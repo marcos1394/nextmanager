@@ -18,6 +18,10 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+// --- IMPORTACIONES ---
+import { registerUser } from '../services/api'; // <-- 1. IMPORTA LA FUNCIÓN DE LA API
+import * as SecureStore from 'expo-secure-store'; // <-- 2. IMPORTA SECURESTORE
+import { useAuth } from '../context/AuthContext'; // <-- 3. IMPORTA EL CONTEXTO (si lo tienes)
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -305,6 +309,7 @@ const CustomButton = ({ title, onPress, disabled, loading, style, variant = 'pri
 const RegisterScreen = () => {
     const navigation = useNavigation();
     const [currentStep, setCurrentStep] = useState(1);
+    const { register } = useAuth(); // <-- AÑADE ESTA LÍNEA
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -316,6 +321,7 @@ const RegisterScreen = () => {
     });
     
     const [errors, setErrors] = useState({});
+    const [isLoading, setIsLoading] = useState(false); // <-- AÑADE ESTADO DE CARGA
     const [passwordCriteria, setPasswordCriteria] = useState({
         length: false,
         uppercase: false,
@@ -428,14 +434,13 @@ const RegisterScreen = () => {
     // Dentro de tu componente RegisterScreen
 
 const handleRegister = async () => {
-    // La validación se asegura de que solo lleguemos aquí si todos los datos son correctos
     if (!validateStep(3)) {
         return;
     }
 
+    setIsLoading(true); // <-- Activa el estado de carga
+
     try {
-        // --- INICIO DE LA LÓGICA DE CONEXIÓN ---
-        
         // 1. Preparamos los datos que el endpoint '/register' espera
         const registrationData = {
             name: formData.name,
@@ -445,43 +450,34 @@ const handleRegister = async () => {
             phoneNumber: formData.phoneNumber
         };
 
-        // 2. Hacemos la llamada a la API usando la IP de tu servidor
-        // NOTA: Reemplaza '192.168.0.200' con la IP real de tu servidor cuando estés en producción.
-        const response = await fetch('https://192.168.0.200/api/auth/register', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(registrationData),
-        });
+        // 2. Llamamos a la función 'register' de nuestro AuthContext
+        // Esta función se encarga de llamar a la API, guardar los tokens y actualizar el estado del usuario.
+        await register(registrationData);
 
-        const data = await response.json();
-
-        // 3. Manejamos la respuesta del backend
-        if (!response.ok || !data.success) {
-            // Si el backend devuelve un error (ej. email duplicado), lo mostramos
-            throw new Error(data.message || 'Ocurrió un error durante el registro.');
-        }
-
-        // 4. Si todo sale bien, mostramos una notificación y navegamos al login
-        console.log("Registro exitoso:", data);
         if (Platform.OS === 'ios') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         
-        // Puedes usar una alerta o un toast para dar feedback al usuario
+        // 3. Si todo sale bien, redirigimos al usuario a la página de Planes
         Alert.alert(
             "¡Registro Exitoso!",
-            "Tu cuenta ha sido creada. Ahora puedes iniciar sesión.",
-            [{ text: "OK", onPress: () => navigation.navigate('Login') }]
+            "Tu cuenta ha sido creada. Ahora, vamos a configurar tu plan.",
+            [{ 
+                text: "OK", 
+                onPress: () => navigation.navigate('Plans') // <-- Redirige a Planes
+            }]
         );
-
-        // --- FIN DE LA LÓGICA DE CONEXIÓN ---
 
     } catch (error) {
         console.error('Error en registro:', error);
-        // Mostramos el error de la API al usuario
-        Alert.alert("Error de Registro", error.message);
+        // Extraemos el mensaje de error real
+        const errorMessage = error.response?.data?.message || error.message;
+        Alert.alert("Error de Registro", errorMessage);
+        if (Platform.OS === 'ios') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        }
+    } finally {
+        setIsLoading(false); // <-- Desactiva el estado de carga
     }
 };
 
@@ -732,25 +728,29 @@ const handleRegister = async () => {
                     </ScrollView>
 
                     {/* Footer con botones */}
-                    <View style={styles.footer}>
-                        {currentStep > 1 && (
-                            <CustomButton
-                                title="Anterior"
-                                onPress={prevStep}
-                                variant="secondary"
-                                style={styles.backStepButton}
-                            />
-                        )}
+                   <View style={styles.footer}>
+                    {currentStep > 1 && (
                         <CustomButton
-                            title={currentStep < 3 ? 'Continuar' : 'Crear Cuenta'}
-                            onPress={nextStep}
-                            disabled={!isStepValid()}
-                            style={[
-                                styles.nextStepButton,
-                                currentStep === 1 && styles.fullWidthButton
-                            ]}
+                            title="Anterior"
+                            onPress={prevStep}
+                            variant="secondary"
+                            style={styles.backStepButton}
+                            disabled={isLoading} // <-- AÑADIDO: Deshabilitar si está cargando
                         />
-                    </View>
+                    )}
+                    <CustomButton
+                        // --- CORRECCIÓN CLAVE ---
+                        // Cambia el texto y deshabilita el botón si 'isLoading' es true
+                        title={isLoading ? 'Creando Cuenta...' : (currentStep < 3 ? 'Continuar' : 'Crear Cuenta')}
+                        onPress={nextStep}
+                        disabled={!isStepValid() || isLoading}
+                        // --- FIN DE LA CORRECCIÓN ---
+                        style={[
+                            styles.nextStepButton,
+                            currentStep === 1 && styles.fullWidthButton
+                        ]}
+                    />
+                </View>
                 </KeyboardAvoidingView>
             </LinearGradient>
         </SafeAreaView>

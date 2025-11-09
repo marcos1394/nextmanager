@@ -1,72 +1,124 @@
-// src/services/api.js
-
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// La IP de tu servidor. En producción, será tu dominio.
-const API_URL = 'https://192.168.0.200/api';
+// --- URL BASE DE TU API ---
+// Usa tu dominio de producción real
+const API_URL = 'https://www.nextmanager.com.mx/api';
 
+// 1. Crea la instancia de Axios
 const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: API_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
 });
 
-// --- INTERCEPTOR DE PETICIÓN (Request) ---
-// Antes de que cualquier petición se envíe, este interceptor se asegura
-// de que lleve el token de acceso en las cabeceras.
+// 2. Interceptor de Petición (Request)
+// Esto es clave: adjunta el accessToken a CADA petición automáticamente.
 api.interceptors.request.use(
-  async (config) => {
-    const accessToken = await SecureStore.getItemAsync('accessToken');
-    if (accessToken) {
-      config.headers.Authorization = accessToken; // Ya debe tener el formato "Bearer ..."
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
+    async (config) => {
+        const token = await SecureStore.getItemAsync('accessToken');
+        if (token) {
+            config.headers.Authorization = token;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
 
-// --- INTERCEPTOR DE RESPUESTA (Response) ---
-// Este interceptor se activa si una petición falla por un error de autenticación (401).
-// Su trabajo es intentar refrescar el token y reintentar la petición original.
+// 3. Interceptor de Respuesta (Response)
+// Maneja la expiración de tokens automáticamente.
 api.interceptors.response.use(
-  (response) => response, // Si la respuesta es exitosa, no hace nada.
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // Si el error es un 401 y no es una petición de refresco fallida
-    if (error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; // Marcamos para evitar bucles infinitos
-
-      try {
-        const refreshToken = await SecureStore.getItemAsync('refreshToken');
-        if (!refreshToken) return Promise.reject(error);
-
-        // Pedimos un nuevo token de acceso usando el de refresco
-        const response = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
-        const { accessToken: newAccessToken } = response.data;
+    (response) => response, // Si todo bien, devuelve la respuesta
+    async (error) => {
+        const originalRequest = error.config;
         
-        // Guardamos el nuevo token de acceso
-        await SecureStore.setItemAsync('accessToken', newAccessToken);
+        // Si el token expiró (error 401) y no hemos reintentado...
+        if (error.response?.status === 401 && !originalRequest._retry) {
+            originalRequest._retry = true;
+            
+            try {
+                // Intenta obtener un nuevo accessToken usando el refreshToken
+                const refreshToken = await SecureStore.getItemAsync('refreshToken');
+                if (!refreshToken) return Promise.reject(error);
 
-        // Actualizamos la cabecera de la petición original y la reintentamos
-        api.defaults.headers.common['Authorization'] = newAccessToken;
-        originalRequest.headers['Authorization'] = newAccessToken;
-        
-        return api(originalRequest);
-        
-      } catch (refreshError) {
-        // Si el refresco falla (ej. el refreshToken también expiró), cerramos la sesión.
-        // Aquí podrías llamar a una función de logout global.
-        console.error("Refresh token inválido. Cerrando sesión.", refreshError);
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        // Redirigir al login
-      }
+                const rs = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
+                const { accessToken } = rs.data;
+
+                // Guarda el nuevo token y actualiza la cabecera por defecto
+                await SecureStore.setItemAsync('accessToken', accessToken);
+                api.defaults.headers.common['Authorization'] = accessToken;
+                
+                // Reintenta la petición original con el nuevo token
+                return api(originalRequest);
+            } catch (refreshError) {
+                // Si el refresh falla, borra todo y rechaza
+                await SecureStore.deleteItemAsync('accessToken');
+                await SecureStore.deleteItemAsync('refreshToken');
+                return Promise.reject(refreshError);
+            }
+        }
+        return Promise.reject(error);
     }
-    return Promise.reject(error);
-  }
 );
+
+// --- Funciones de API que tu app usará ---
+
+export const registerUser = async (registrationData) => {
+    return api.post('/auth/register', registrationData);
+};
+
+export const loginUser = async (email, password) => {
+    return api.post('/auth/login', { email, password });
+};
+
+export const getAvailablePlans = async () => {
+    try {
+        // Hacemos un GET al endpoint de planes. 
+        // No necesita autenticación porque es una ruta pública.
+        const response = await api.get('/payments/plans');
+        
+        if (response.data.success) {
+            return response.data.plans; // Devuelve solo el array de planes
+        } else {
+            throw new Error('No se pudieron cargar los planes.');
+        }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al obtener los planes.');
+    }
+};
+
+/**
+ * Llama al backend para crear una preferencia de pago en Mercado Pago.
+ * @param {object} paymentData - Los datos para crear la preferencia.
+ * @param {string} paymentData.planId - El ID del plan de la base de datos.
+ * @param {string} paymentData.billingCycle - 'monthly' o 'annually'.
+ * @param {string} paymentData.userId - El ID del perfil del usuario.
+ * @param {object} paymentData.payerInfo - Información del pagador.
+ */
+export const createPaymentPreference = async (paymentData) => {
+    try {
+        const response = await api.post('/payments/create-preference', paymentData);
+        return response.data; // Devuelve { success: true, init_point: '...' }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al crear la preferencia de pago.');
+    }
+};
+
+/**
+ * Consulta el estado de una compra específica en nuestra base de datos.
+ * Esta función es crucial para verificar el resultado de un webhook.
+ * @param {string} purchaseId - El ID de la tabla 'plan_purchases'.
+ */
+export const getPurchaseStatus = async (purchaseId) => {
+    try {
+        const response = await api.get(`/payments/purchase-status/${purchaseId}`);
+        return response.data; // Devuelve { success: true, status: 'active' }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al verificar el estado de la compra.');
+    }
+};
+
+// ... (Aquí irán el resto de tus funciones: getAccountDetails, etc.)
 
 export default api;

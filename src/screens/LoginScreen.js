@@ -19,6 +19,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext'; // 1. Importa el hook de autenticación
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -359,6 +360,7 @@ const BiometricButton = ({ onPress, available }) => {
 // --- COMPONENTE PRINCIPAL ---
 const LoginScreen = () => {
     const navigation = useNavigation();
+    const { login, isLoading: isAuthLoading } = useAuth(); // 2. Obtén la función 'login' del contexto
     const [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -423,48 +425,46 @@ const LoginScreen = () => {
         return Object.keys(errors).length === 0;
     };
 
+    // --- FUNCIÓN handleLogin (ABSOLUTAMENTE COMPLETA Y CORREGIDA) ---
     const handleLogin = async () => {
-    if (!validateForm()) return;
+        if (!validateForm()) return;
 
-    setLoading(true);
-    setFormErrors({});
+        setLoading(true);
+        setFormErrors({});
 
-    try {
-        // 1. Llamamos a la función login de nuestro AuthContext.
-        // Ésta se encarga de llamar a la API, guardar los tokens de forma segura
-        // y obtener los datos completos del usuario.
-        const loginResponse = await login(formData.email, formData.password);
+        try {
+            // 1. Llamamos a la función 'login' de nuestro AuthContext.
+            // Esta se encarga de llamar a la API, guardar los tokens en SecureStore
+            // y actualizar el estado global 'user'.
+            // También nos devuelve la ruta de destino.
+            const destination = await login(formData.email, formData.password);
 
-        // 2. Revisamos el 'status' que devuelve el endpoint de login
-        const userStatus = loginResponse.status;
-        
-        if (Platform.OS === 'ios') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (Platform.OS === 'ios') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            }
+
+            // 2. Lógica de Redirección Inteligente
+            // Usamos 'navigation.replace' para que el usuario no pueda
+            // volver a la pantalla de Login con el botón "atrás".
+            if (destination === '/plans') {
+                navigation.replace('PlanSelection');
+            } else if (destination === '/restaurant-config') {
+                navigation.replace('RestaurantSetup');
+            } else {
+                navigation.replace('Dashboard');
+            }
+
+        } catch (error) {
+            const errorMessage = error.response?.data?.message || 'Credenciales inválidas o error de conexión.';
+            setFormErrors({ general: errorMessage });
+            
+            if (Platform.OS === 'ios') {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            }
+        } finally {
+            setLoading(false);
         }
-
-        // 3. Lógica de Redirección Inteligente
-        if (!userStatus.hasPlan) {
-            // Si no tiene plan, lo mandamos a seleccionar uno.
-            navigation.replace('PlanSelection');
-        } else if (!userStatus.hasRestaurant) {
-            // Si tiene plan pero no ha configurado su restaurante, lo mandamos a configurarlo.
-            navigation.replace('RestaurantSetup');
-        } else {
-            // Si tiene todo, lo mandamos al dashboard principal.
-            navigation.replace('Dashboard');
-        }
-
-    } catch (error) {
-        const errorMessage = error.response?.data?.message || 'Credenciales inválidas o error de conexión.';
-        setFormErrors({ general: errorMessage });
-        
-        if (Platform.OS === 'ios') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        }
-    } finally {
-        setLoading(false);
-    }
-};
+    };
 
     const handleSocialLogin = async (provider) => {
         setSocialLoading(provider);

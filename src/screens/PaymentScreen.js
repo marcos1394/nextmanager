@@ -20,8 +20,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useAuth } from '../hooks/useAuth'; // Tu AuthContext
-import api from '../services/api'; // Tu cliente de API (axios)
+import { useAuth } from '../context/AuthContext';
+import { createPaymentPreference } from '../services/api';
 
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -364,8 +364,7 @@ const ProcessingModal = ({ isVisible }) => {
 const PaymentGatewayScreen = () => {
     const navigation = useNavigation();
     const route = useRoute();
-    const { user } = useAuth(); // Obtenemos la información del usuario logueado
-
+const { user, isLoading: isAuthLoading } = useAuth();
     
     const [isProcessing, setIsProcessing] = useState(false);
     const [showProcessingModal, setShowProcessingModal] = useState(false);
@@ -420,12 +419,14 @@ const PaymentGatewayScreen = () => {
         }
     };
 
-    const handlePayment = async () => {
+   const handlePayment = async () => {
     if (isProcessing) return;
 
+    // --- CORRECCIÓN CLAVE ---
+    // 1. Validamos 'planId' (que viene de PlanSelection) y 'user.profile.id' (que viene de AuthContext)
     const planId = selectedPlan?.planId;
     const billingCycle = selectedPlan?.period;
-    const userId = user?.id;
+    const userId = user?.profile?.id; // <-- Usamos la estructura anidada
 
     if (!planId || !billingCycle || !userId) {
         Alert.alert("Error", "Falta información del plan o del usuario.");
@@ -436,29 +437,47 @@ const PaymentGatewayScreen = () => {
     setShowProcessingModal(true);
 
     try {
-        // Llamamos a nuestro backend para crear la preferencia de pago
-        const response = await api.post('/payments/create-preference', {
-            planId,
-            billingCycle,
-            userId,
-            origin: 'mobile_app_onboarding'
-        });
+        // 2. Preparamos el payload completo, incluyendo 'payerInfo'
+        const nameParts = user.profile.name.split(' ');
+        const name = nameParts[0];
+        const surname = nameParts.slice(1).join(' ');
 
-        if (response.data.success && response.data.init_point) {
-            const paymentUrl = response.data.init_point;
+        const paymentData = {
+            planId: planId,
+            billingCycle: billingCycle,
+            userId: userId,
+            origin: 'mobile_app_onboarding', // <-- El identificador para el backend
+            payerInfo: {
+                email: user.profile.email,
+                name: name,
+                surname: surname
+            }
+        };
+        
+        // 3. Llamamos a la función de la API
+        const response = await createPaymentPreference(paymentData);
+
+        if (response.success && response.init_point) {
+            const paymentUrl = response.init_point;
             const supported = await Linking.canOpenURL(paymentUrl);
+            
             if (supported) {
                 await Linking.openURL(paymentUrl);
             } else {
                 throw new Error(`No se puede abrir esta URL: ${paymentUrl}`);
             }
-            // Pasamos el MISMO objeto 'selectedPlan' a la pantalla de éxito
-            navigation.navigate('PaymentSuccess', { selectedPlan });
+            
+            // 4. Pasamos el ID de NUESTRA compra (external_reference)
+            //    a la pantalla de éxito para que pueda verificar el estado.
+            navigation.navigate('PaymentSuccess', { 
+                selectedPlan: selectedPlan,
+                purchaseId: response.external_reference 
+            });
         } else {
-            throw new Error(response.data.message || 'No se pudo obtener la URL de pago.');
+            throw new Error(response.message || 'No se pudo obtener la URL de pago.');
         }
     } catch (error) {
-        const errorMessage = error.response?.data?.message || 'Error al iniciar el proceso de pago.';
+        const errorMessage = error.message || 'Error al iniciar el proceso de pago.';
         Alert.alert('Error en el pago', errorMessage);
     } finally {
         setIsProcessing(false);

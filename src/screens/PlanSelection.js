@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { getAvailablePlans } from '../services/api'; // <-- 1. IMPORTA LA FUNCIÓN
 
 
 
@@ -555,7 +556,7 @@ const PlanSelectionScreen = () => {
     const headerSlideAnim = useRef(new Animated.Value(-50)).current;
 
     useEffect(() => {
-        // Animación de entrada del header
+        // 1. Animación de entrada (tu código actual)
         Animated.parallel([
             Animated.timing(headerFadeAnim, {
                 toValue: 1,
@@ -569,7 +570,26 @@ const PlanSelectionScreen = () => {
                 useNativeDriver: true,
             }),
         ]).start();
-    }, []);
+
+        // 2. Función para cargar los planes desde la API
+        const fetchPlans = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
+                const plansData = await getAvailablePlans();
+                setPlans(plansData); // Guarda los planes en el estado
+            } catch (err) {
+                console.error("Error al cargar planes:", err);
+                setError(err.message);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        // 3. Llama a la función
+        fetchPlans();
+
+    }, []); // El array vacío asegura que todo esto se ejecute solo una vez
 
     const handlePlanSelect = (plan) => {
     // Construimos un objeto limpio con los datos exactos que necesitamos
@@ -639,7 +659,6 @@ const PlanSelectionScreen = () => {
                     setBillingCycle={setBillingCycle} 
                 />
 
-               // En tu componente PlanSelectionScreen, reemplaza el bloque de renderizado existente con este:
 
 {isLoading && (
     <View style={styles.centeredContainer}>
