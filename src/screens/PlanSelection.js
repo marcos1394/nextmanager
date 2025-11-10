@@ -25,52 +25,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 40;
 const CARD_SPACING = 20;
 
-useEffect(() => {
-    // --- LÓGICA DE CARGA DE DATOS ---
-    const fetchPlans = async () => {
-        try {
-            setIsLoading(true);
-            setError(null); // Limpiar errores anteriores
-            
-            // NOTA: Usa la IP de tu servidor para pruebas. En producción, será tu dominio.
-            const response = await fetch('https://192.168.0.200/api/payments/plans');
-            const data = await response.json();
 
-            if (!response.ok || !data.success) {
-                throw new Error(data.message || 'No se pudieron cargar los planes.');
-            }
-
-            setPlans(data.plans);
-
-        } catch (err) {
-            console.error("Error al cargar los planes:", err);
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
-    // Llamamos a la función para que se ejecute
-    fetchPlans();
-
-    // --- LÓGICA DE ANIMACIÓN (sin cambios) ---
-    // La animación de entrada del header se ejecuta en paralelo a la carga de datos
-    Animated.parallel([
-        Animated.timing(headerFadeAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-        }),
-        Animated.spring(headerSlideAnim, {
-            toValue: 0,
-            tension: 50,
-            friction: 8,
-            useNativeDriver: true,
-        }),
-    ]).start();
-
-}, []); // El array de dependencias vacío asegura que se ejecute solo una vez al cargar la pantalla
-// --- COMPONENTES UI MEJORADOS ---
 
 const AnimatedBillingToggle = ({ billingCycle, setBillingCycle }) => {
     const slideAnim = useRef(new Animated.Value(billingCycle === 'monthly' ? 0 : 1)).current;
