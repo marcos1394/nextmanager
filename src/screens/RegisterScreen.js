@@ -433,16 +433,16 @@ const RegisterScreen = () => {
 
     // Dentro de tu componente RegisterScreen
 
+// En src/screens/RegisterScreen.js
+
 const handleRegister = async () => {
-    // 1. Validación (tu código actual)
     if (!validateStep(3)) {
         return;
     }
 
-    setIsLoading(true); // Activa el estado de carga
+    setIsLoading(true);
 
     try {
-        // 2. Preparación de datos (tu código actual)
         const registrationData = {
             name: formData.name,
             email: formData.email,
@@ -451,14 +451,14 @@ const handleRegister = async () => {
             phoneNumber: formData.phoneNumber
         };
 
-        // 3. Llamada al AuthContext (tu código actual)
+        // Tu lógica de llamada al AuthContext es correcta
         await register(registrationData);
 
+        // --- ÉXITO ---
         if (Platform.OS === 'ios') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         
-        // 4. Alerta de éxito (tu código actual)
         Alert.alert(
             "¡Registro Exitoso!",
             "Tu cuenta ha sido creada. Ahora, vamos a configurar tu plan.",
@@ -469,36 +469,41 @@ const handleRegister = async () => {
         );
 
     } catch (error) {
-        // --- INICIO DE LA CORRECCIÓN PROFESIONAL ---
+        // --- INICIO DE LA CORRECCIÓN DE LOGS ---
 
-        // 5. LOGGING (Para tu terminal de Expo)
-        // Imprime el error completo y estructurado para que TÚ puedas depurarlo.
-        console.error('[handleRegister] Error al registrar usuario:', {
-            message: error.message,
-            status: error.response?.status,
-            backendMessage: error.response?.data?.message,
-            data: error.response?.data,
-        });
-
-        // 6. MENSAJE PARA EL USUARIO (UX/UI)
-        // Define un mensaje amigable por defecto.
-        let userFriendlyMessage = 'No pudimos crear tu cuenta. Revisa tu conexión e inténtalo de nuevo.';
+        // 1. LOG PARA EL DESARROLLADOR (Tu terminal de Expo)
+        // Esto imprimirá el error COMPLETO para que tú lo veas.
+        console.error('[handleRegister] Error al registrar:', error);
         
-        // Si el backend envió un mensaje claro (ej. "El correo ya está en uso"), lo usamos.
-        if (error.response?.data?.message) {
-            userFriendlyMessage = error.response.data.message;
+        // Si es un error de Axios, imprimimos los detalles
+        if (error.response) {
+            console.error('[handleRegister] Detalles del error (backend):', {
+                status: error.response.status, // Ej: 502
+                data: error.response.data      // Ej: El HTML de "Bad Gateway"
+            });
         }
 
-        // Muestra la alerta amigable al usuario.
+        // 2. MENSAJE PARA EL USUARIO (UX/UI)
+        // Definimos un mensaje amigable por defecto.
+        let userFriendlyMessage = 'No pudimos crear tu cuenta. Revisa tu conexión e inténtalo de nuevo.';
+        
+        // Si el backend SÍ nos dio un error específico (ej. 409), lo usamos.
+        if (error.response?.data?.message) {
+            userFriendlyMessage = error.response.data.message;
+        } else if (error.response?.status === 502) {
+            userFriendlyMessage = 'El servidor no está respondiendo. Por favor, intenta de nuevo más tarde.';
+        }
+
+        // Mostramos la alerta amigable al usuario.
         Alert.alert("Error de Registro", userFriendlyMessage);
         
         if (Platform.OS === 'ios') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
         // --- FIN DE LA CORRECCIÓN ---
-
+        
     } finally {
-        setIsLoading(false); // Desactiva el estado de carga
+        setIsLoading(false);
     }
 };
 
