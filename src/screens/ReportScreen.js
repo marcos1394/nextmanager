@@ -17,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
-import { Dimensions } from 'react-native';
 const { width: screenWidth } = Dimensions.get('window');
 
 
