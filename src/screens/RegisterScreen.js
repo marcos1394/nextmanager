@@ -434,14 +434,15 @@ const RegisterScreen = () => {
     // Dentro de tu componente RegisterScreen
 
 const handleRegister = async () => {
+    // 1. Validación (tu código actual)
     if (!validateStep(3)) {
         return;
     }
 
-    setIsLoading(true); // <-- Activa el estado de carga
+    setIsLoading(true); // Activa el estado de carga
 
     try {
-        // 1. Preparamos los datos que el endpoint '/register' espera
+        // 2. Preparación de datos (tu código actual)
         const registrationData = {
             name: formData.name,
             email: formData.email,
@@ -450,34 +451,54 @@ const handleRegister = async () => {
             phoneNumber: formData.phoneNumber
         };
 
-        // 2. Llamamos a la función 'register' de nuestro AuthContext
-        // Esta función se encarga de llamar a la API, guardar los tokens y actualizar el estado del usuario.
+        // 3. Llamada al AuthContext (tu código actual)
         await register(registrationData);
 
         if (Platform.OS === 'ios') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
         
-        // 3. Si todo sale bien, redirigimos al usuario a la página de Planes
+        // 4. Alerta de éxito (tu código actual)
         Alert.alert(
             "¡Registro Exitoso!",
             "Tu cuenta ha sido creada. Ahora, vamos a configurar tu plan.",
             [{ 
                 text: "OK", 
-                onPress: () => navigation.navigate('Plans') // <-- Redirige a Planes
+                onPress: () => navigation.navigate('Plans')
             }]
         );
 
     } catch (error) {
-        console.error('Error en registro:', error);
-        // Extraemos el mensaje de error real
-        const errorMessage = error.response?.data?.message || error.message;
-        Alert.alert("Error de Registro", errorMessage);
+        // --- INICIO DE LA CORRECCIÓN PROFESIONAL ---
+
+        // 5. LOGGING (Para tu terminal de Expo)
+        // Imprime el error completo y estructurado para que TÚ puedas depurarlo.
+        console.error('[handleRegister] Error al registrar usuario:', {
+            message: error.message,
+            status: error.response?.status,
+            backendMessage: error.response?.data?.message,
+            data: error.response?.data,
+        });
+
+        // 6. MENSAJE PARA EL USUARIO (UX/UI)
+        // Define un mensaje amigable por defecto.
+        let userFriendlyMessage = 'No pudimos crear tu cuenta. Revisa tu conexión e inténtalo de nuevo.';
+        
+        // Si el backend envió un mensaje claro (ej. "El correo ya está en uso"), lo usamos.
+        if (error.response?.data?.message) {
+            userFriendlyMessage = error.response.data.message;
+        }
+
+        // Muestra la alerta amigable al usuario.
+        Alert.alert("Error de Registro", userFriendlyMessage);
+        
         if (Platform.OS === 'ios') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
+        // --- FIN DE LA CORRECCIÓN ---
+
     } finally {
-        setIsLoading(false); // <-- Desactiva el estado de carga
+        setIsLoading(false); // Desactiva el estado de carga
     }
 };
 
