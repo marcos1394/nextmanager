@@ -17,8 +17,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import api from '../services/api'; // Asegúrate de importar tu cliente de API
-
+import { getHelpCenterContent, searchHelpArticles } from '../services/api';
+import { useDebounce } from '../hooks/useDebounce'; // Asegúrate de tener este hook
+import { useAuth } from '../hooks/useAuth';
 
 const { width } = Dimensions.get('window');
 
@@ -370,19 +371,25 @@ const HelpCenterScreen = ({ navigation }) => {
     });
     const contentAnim = useRef(new Animated.Value(0)).current;
 
+    // --- NUEVOS ESTADOS PARA BÚSQUEDA ---
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
+    const debouncedSearch = useDebounce(searchText, 500); // 500ms de retraso
+
+    // --- useEffect PARA LA CARGA INICIAL (CORREGIDO) ---
     useEffect(() => {
         const fetchHelpContent = async () => {
             try {
                 setIsLoading(true);
                 setError(null);
-                // La ruta '/content' será redirigida por el api-gateway al content-service
-                const response = await api.get('/content/help-center/content');
-                const data = await response.data;
+                
+                // 1. Llama a la nueva función de api.js
+                const response = await getHelpCenterContent();
 
-                if (data.success) {
-                    setHelpContent(data.data);
+                if (response.success) {
+                    setHelpContent(response.data);
                 } else {
-                    throw new Error(data.message || 'No se pudo cargar el contenido de ayuda.');
+                    throw new Error(response.message || 'No se pudo cargar el contenido de ayuda.');
                 }
             } catch (err) {
                 setError(err.message);
@@ -394,13 +401,40 @@ const HelpCenterScreen = ({ navigation }) => {
 
         fetchHelpContent();
         
+        // 2. Animación (tu código original)
         Animated.timing(contentAnim, {
             toValue: 1,
             duration: 800,
             useNativeDriver: true,
         }).start();
-    }, []);
+    }, []); // El array vacío es correcto
 
+    // --- NUEVO useEffect PARA LA BÚSQUEDA ---
+    useEffect(() => {
+        const fetchSearch = async () => {
+            // Si el término de búsqueda está vacío, limpia los resultados
+            if (debouncedSearch.length < 3) {
+                setSearchResults([]);
+                return;
+            }
+
+            console.log(`Buscando: ${debouncedSearch}`);
+            setIsSearching(true);
+            try {
+                const response = await searchHelpArticles(debouncedSearch);
+                if (response.success) {
+                    setSearchResults(response.results);
+                }
+            } catch (error) {
+                console.error("Error en la búsqueda:", error);
+            } finally {
+                setIsSearching(false);
+            }
+        };
+        
+        fetchSearch();
+    }, [debouncedSearch]); // Se ejecuta cada vez que el usuario deja de teclear
+    
     const handleCategoryPress = (category) => {
         if (Platform.OS === 'ios') {
             const { impactAsync, ImpactFeedbackStyle } = require('expo-haptics');

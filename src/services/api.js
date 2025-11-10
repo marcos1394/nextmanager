@@ -119,6 +119,62 @@ export const getPurchaseStatus = async (purchaseId) => {
     }
 };
 
+/**
+ * Envía el formulario de contacto al backend (notification-service).
+ * Esta ruta es pública, pero el interceptor adjuntará el token si el usuario está logueado.
+ * @param {object} contactData - { subject, message, userInfo }
+ */
+export const sendContactForm = async (contactData) => {
+    try {
+        const response = await api.post('/notifications/contact-form', contactData);
+        return response.data; // Devuelve { success: true, message: '...' }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al enviar el formulario de contacto.');
+    }
+};
+
+/**
+ * Obtiene el contenido principal para la pantalla del Centro de Ayuda.
+ * (Categorías, Artículos Populares, etc.)
+ */
+export const getHelpCenterContent = async () => {
+    try {
+        // El api-gateway redirigirá /api/content -> /content-service
+        const response = await api.get('/content/help-center/content');
+        return response.data; // Devuelve { success: true, data: {...} }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al cargar el centro de ayuda.');
+    }
+};
+
+/**
+ * Busca artículos de ayuda basados en un término de búsqueda.
+ * @param {string} query - El término a buscar.
+ */
+export const searchHelpArticles = async (query) => {
+    try {
+        const response = await api.get('/content/help-center/search', {
+            params: { q: query } // Envía el término como un query param
+        });
+        return response.data; // Devuelve { success: true, results: [...] }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al realizar la búsqueda.');
+    }
+};
+
+/**
+ * CREA un nuevo artículo de ayuda (para un admin).
+ * @param {object} articleData - { categoryId, title, slug, content, isPopular }
+ */
+export const createHelpArticle = async (articleData) => {
+    try {
+        const response = await api.post('/content/help-center/articles', articleData);
+        return response.data; // Devuelve { success: true, article: {...} }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al crear el artículo.');
+    }
+}
+
 // ... (Aquí irán el resto de tus funciones: getAccountDetails, etc.)
 
 export default api;

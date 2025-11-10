@@ -20,8 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useAuth } from '../hooks/useAuth'; // Para saber si el usuario está logueado
-import api from '../services/api'; // Tu cliente de API (axios)
-
+import { sendContactForm } from '../services/api';
 const { width } = Dimensions.get('window');
 
 // --- COMPONENTES MEJORADOS ---
@@ -306,7 +305,7 @@ const ContactScreen = ({ navigation }) => {
         }).start();
     }, []);
 
-    const handleSubmit = async () => {
+   const handleSubmit = async () => {
     if (!subject.trim() || !message.trim()) {
         Alert.alert(
             'Campos requeridos',
@@ -317,26 +316,31 @@ const ContactScreen = ({ navigation }) => {
 
     setLoading(true);
     if (Platform.OS === 'ios') {
-        // ... (tu código de haptics)
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
     try {
-        // --- INICIO DE LA LÓGICA REAL ---
-        
-        // 1. Llamamos al endpoint '/contact-form' en nuestro 'notification-service'.
-        //    El API Gateway lo enrutará desde '/api/notifications/contact-form'.
-        const response = await api.post('/notifications/contact-form', {
+        // 1. Preparamos el payload (cuerpo de la petición)
+        const contactData = {
             subject,
             message,
-            // Enviamos la info del usuario si está logueado, si no, se envía null.
-            userInfo: user ? { id: user.profile.id, email: user.profile.email } : null
-        });
+            // Incluimos la información del usuario si está logueado
+            userInfo: user ? { 
+                id: user.profile.id, 
+                email: user.profile.email,
+                name: user.profile.name
+            } : null
+        };
 
-        if (!response.data.success) {
-            throw new Error(response.data.message || 'No se pudo enviar el mensaje.');
+        // 2. Llamamos a la función limpia de nuestra API
+        const response = await sendContactForm(contactData);
+
+        if (!response.success) {
+            // Maneja un error devuelto por el backend
+            throw new Error(response.message || 'No se pudo enviar el mensaje.');
         }
         
-        // 2. Si todo sale bien, mostramos la alerta de éxito.
+        // 3. Si todo sale bien, mostramos la alerta de éxito
         setLoading(false);
         Alert.alert(
             '¡Mensaje enviado!',
@@ -350,11 +354,10 @@ const ContactScreen = ({ navigation }) => {
                 }
             }]
         );
-        // --- FIN DE LA LÓGICA REAL ---
 
     } catch (error) {
         setLoading(false);
-        const errorMessage = error.response?.data?.message || 'Hubo un problema al enviar tu mensaje.';
+        const errorMessage = error.message || 'Hubo un problema al enviar tu mensaje.';
         Alert.alert('Error', errorMessage);
     }
 };
