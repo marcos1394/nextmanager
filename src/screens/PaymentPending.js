@@ -14,8 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useAuth } from '../hooks/useAuth'; // Asegúrate de importar esto
-
+import { useAuth } from '../context/AuthContext';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // --- COMPONENTES ANIMADOS MEJORADOS ---

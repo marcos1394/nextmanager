@@ -17,7 +17,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Feather, MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
 const { width, height } = Dimensions.get('window');
