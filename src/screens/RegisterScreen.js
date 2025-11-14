@@ -431,10 +431,6 @@ const RegisterScreen = () => {
         }
     };
 
-    // Dentro de tu componente RegisterScreen
-
-// En src/screens/RegisterScreen.js
-
 const handleRegister = async () => {
     if (!validateStep(3)) {
         return;

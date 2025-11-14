@@ -2,7 +2,6 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 // --- URL BASE DE TU API ---
-// Usa tu dominio de producción real
 const API_URL = 'https://www.nextmanager.com.mx/api';
 
 // 1. Crea la instancia de Axios
@@ -13,46 +12,80 @@ const api = axios.create({
     },
 });
 
+// ------------------------------------------------------------------
+// --- LOGGING DE PETICIONES (INTERCEPTORES) ---
+// ------------------------------------------------------------------
+
 // 2. Interceptor de Petición (Request)
-// Esto es clave: adjunta el accessToken a CADA petición automáticamente.
+// Se ejecuta ANTES de que cualquier petición sea enviada.
 api.interceptors.request.use(
     async (config) => {
+        // --- LOG PARA TU TERMINAL ---
+        console.log(`[API Request] 🚀 --> ${config.method.toUpperCase()} ${config.url}`);
+        if (config.data) {
+            console.log('[API Request] Payload:', JSON.stringify(config.data, null, 2));
+        }
+        // --- FIN DE LOG ---
+
         const token = await SecureStore.getItemAsync('accessToken');
         if (token) {
             config.headers.Authorization = token;
         }
         return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        // Log si la petición ni siquiera se pudo configurar
+        console.error('[API Request Error] Error al configurar la petición:', error.message);
+        return Promise.reject(error);
+    }
 );
 
 // 3. Interceptor de Respuesta (Response)
-// Maneja la expiración de tokens automáticamente.
+// Se ejecuta DESPUÉS de recibir cualquier respuesta del backend.
 api.interceptors.response.use(
-    (response) => response, // Si todo bien, devuelve la respuesta
+    (response) => {
+        // --- LOG PARA TU TERMINAL ---
+        // Loguea cualquier respuesta exitosa (2xx)
+        console.log(`[API Response] ✅ <-- ${response.status} ${response.config.url}`);
+        // --- FIN DE LOG ---
+        return response;
+    },
     async (error) => {
         const originalRequest = error.config;
+
+        // --- LOG DE ERROR DETALLADO (PARA TU TERMINAL) ---
+        // Aquí es donde veremos el 502 Bad Gateway
+        console.error(`[API Error] ❌ !!!! ${error.config.method.toUpperCase()} ${error.config.url}`);
         
-        // Si el token expiró (error 401) y no hemos reintentado...
+        if (error.response) {
+            // El servidor respondió con un error (4xx, 5xx)
+            console.error('[API Error] Status:', error.response.status); // Ej: 502
+            console.error('[API Error] Data:', JSON.stringify(error.response.data, null, 2)); // Ej: El HTML de "Bad Gateway"
+        } else if (error.request) {
+            // La petición se hizo pero no hubo respuesta (ej. sin internet, 502)
+            console.error('[API Error] No Response: El servidor no respondió o está caído.', error.message);
+        } else {
+            // Error al configurar la petición
+            console.error('[API Error] Request Setup Error:', error.message);
+        }
+        // --- FIN DE LOG ---
+
+        // Lógica de Refresh Token (tu código actual)
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
-            
             try {
-                // Intenta obtener un nuevo accessToken usando el refreshToken
                 const refreshToken = await SecureStore.getItemAsync('refreshToken');
                 if (!refreshToken) return Promise.reject(error);
 
+                // El refresh-token no debe loguearse a sí mismo para evitar bucles
                 const rs = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
                 const { accessToken } = rs.data;
 
-                // Guarda el nuevo token y actualiza la cabecera por defecto
                 await SecureStore.setItemAsync('accessToken', accessToken);
                 api.defaults.headers.common['Authorization'] = accessToken;
                 
-                // Reintenta la petición original con el nuevo token
                 return api(originalRequest);
             } catch (refreshError) {
-                // Si el refresh falla, borra todo y rechaza
                 await SecureStore.deleteItemAsync('accessToken');
                 await SecureStore.deleteItemAsync('refreshToken');
                 return Promise.reject(refreshError);
@@ -62,8 +95,11 @@ api.interceptors.response.use(
     }
 );
 
-// --- Funciones de API que tu app usará ---
+// ------------------------------------------------------------------
+// --- ENDPOINTS DE LA API ---
+// ------------------------------------------------------------------
 
+// --- Auth Service ---
 export const registerUser = async (registrationData) => {
     return api.post('/auth/register', registrationData);
 };
@@ -72,14 +108,14 @@ export const loginUser = async (email, password) => {
     return api.post('/auth/login', { email, password });
 };
 
+// (Aquí irían tus otras funciones de auth: logoutUser, passwordForgot, etc.)
+
+// --- Payment Service ---
 export const getAvailablePlans = async () => {
     try {
-        // Hacemos un GET al endpoint de planes. 
-        // No necesita autenticación porque es una ruta pública.
         const response = await api.get('/payments/plans');
-        
         if (response.data.success) {
-            return response.data.plans; // Devuelve solo el array de planes
+            return response.data.plans;
         } else {
             throw new Error('No se pudieron cargar los planes.');
         }
@@ -88,93 +124,65 @@ export const getAvailablePlans = async () => {
     }
 };
 
-/**
- * Llama al backend para crear una preferencia de pago en Mercado Pago.
- * @param {object} paymentData - Los datos para crear la preferencia.
- * @param {string} paymentData.planId - El ID del plan de la base de datos.
- * @param {string} paymentData.billingCycle - 'monthly' o 'annually'.
- * @param {string} paymentData.userId - El ID del perfil del usuario.
- * @param {object} paymentData.payerInfo - Información del pagador.
- */
 export const createPaymentPreference = async (paymentData) => {
     try {
         const response = await api.post('/payments/create-preference', paymentData);
-        return response.data; // Devuelve { success: true, init_point: '...' }
+        return response.data;
     } catch (error) {
         throw error.response?.data || new Error('Error al crear la preferencia de pago.');
     }
 };
 
-/**
- * Consulta el estado de una compra específica en nuestra base de datos.
- * Esta función es crucial para verificar el resultado de un webhook.
- * @param {string} purchaseId - El ID de la tabla 'plan_purchases'.
- */
 export const getPurchaseStatus = async (purchaseId) => {
     try {
         const response = await api.get(`/payments/purchase-status/${purchaseId}`);
-        return response.data; // Devuelve { success: true, status: 'active' }
+        return response.data;
     } catch (error) {
         throw error.response?.data || new Error('Error al verificar el estado de la compra.');
     }
 };
 
-/**
- * Envía el formulario de contacto al backend (notification-service).
- * Esta ruta es pública, pero el interceptor adjuntará el token si el usuario está logueado.
- * @param {object} contactData - { subject, message, userInfo }
- */
+// --- Notification Service ---
 export const sendContactForm = async (contactData) => {
     try {
         const response = await api.post('/notifications/contact-form', contactData);
-        return response.data; // Devuelve { success: true, message: '...' }
+        return response.data;
     } catch (error) {
         throw error.response?.data || new Error('Error al enviar el formulario de contacto.');
     }
 };
 
-/**
- * Obtiene el contenido principal para la pantalla del Centro de Ayuda.
- * (Categorías, Artículos Populares, etc.)
- */
+// --- Content Service ---
 export const getHelpCenterContent = async () => {
     try {
-        // El api-gateway redirigirá /api/content -> /content-service
         const response = await api.get('/content/help-center/content');
-        return response.data; // Devuelve { success: true, data: {...} }
+        return response.data;
     } catch (error) {
         throw error.response?.data || new Error('Error al cargar el centro de ayuda.');
     }
 };
 
-/**
- * Busca artículos de ayuda basados en un término de búsqueda.
- * @param {string} query - El término a buscar.
- */
 export const searchHelpArticles = async (query) => {
     try {
         const response = await api.get('/content/help-center/search', {
-            params: { q: query } // Envía el término como un query param
+            params: { q: query }
         });
-        return response.data; // Devuelve { success: true, results: [...] }
+        return response.data;
     } catch (error) {
         throw error.response?.data || new Error('Error al realizar la búsqueda.');
     }
 };
 
-/**
- * CREA un nuevo artículo de ayuda (para un admin).
- * @param {object} articleData - { categoryId, title, slug, content, isPopular }
- */
 export const createHelpArticle = async (articleData) => {
     try {
         const response = await api.post('/content/help-center/articles', articleData);
-        return response.data; // Devuelve { success: true, article: {...} }
+        return response.data;
     } catch (error) {
         throw error.response?.data || new Error('Error al crear el artículo.');
     }
-}
+};
 
-// ... (Aquí irán el resto de tus funciones: getAccountDetails, etc.)
+// --- POS Service & Restaurant Service ---
+// (Aquí puedes añadir getPosLogbook, getFullRestaurantConfig, etc.)
 
 export default api;
