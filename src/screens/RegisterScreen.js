@@ -22,6 +22,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { registerUser } from '../services/api'; // <-- 1. IMPORTA LA FUNCIÓN DE LA API
 import * as SecureStore from 'expo-secure-store'; // <-- 2. IMPORTA SECURESTORE
 import { useAuth } from '../context/AuthContext'; // <-- 3. IMPORTA EL CONTEXTO (si lo tienes)
+import { Alert } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 
