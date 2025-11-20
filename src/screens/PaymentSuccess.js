@@ -150,6 +150,7 @@ const SuccessAnimation = () => {
     );
 };
 
+
 const PlanSummaryCard = ({ plan, delay = 0 }) => {
     const slideAnim = useRef(new Animated.Value(30)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -175,6 +176,9 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
     }, [delay]);
 
     const getPlanIcon = (planName) => {
+        // --- CORRECCIÓN: Validación de seguridad ---
+        if (!planName) return 'star'; 
+        
         if (planName.includes('Completo')) return 'rocket-launch';
         if (planName.includes('NexFactura')) return 'receipt';
         if (planName.includes('NextManager')) return 'cog';
@@ -182,14 +186,21 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
     };
 
     const getPlanColor = (planName) => {
+        // --- CORRECCIÓN: Validación de seguridad ---
+        if (!planName) return ['#FDB813', '#F59E0B'];
+
         if (planName.includes('Completo')) return ['#FDB813', '#F59E0B'];
         if (planName.includes('NexFactura')) return ['#6366F1', '#4F46E5'];
         if (planName.includes('NextManager')) return ['#10B981', '#059669'];
         return ['#FDB813', '#F59E0B'];
     };
 
-    const planIcon = getPlanIcon(plan.product);
-    const gradientColors = getPlanColor(plan.product);
+    // --- CORRECCIÓN: Fallback seguro para el nombre ---
+    // Intentamos obtener 'product', si no 'name', y si no un string vacío para que no truene
+    const planName = plan?.product || plan?.name || '';
+    
+    const planIcon = getPlanIcon(planName);
+    const gradientColors = getPlanColor(planName);
 
     return (
         <Animated.View
@@ -220,18 +231,18 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
                             <MaterialCommunityIcons name="check-circle" size={14} color="#10B981" />
                             <Text style={styles.planBadgeText}>ACTIVADO</Text>
                         </View>
-                        <Text style={styles.planName}>{plan.product}</Text>
+                        <Text style={styles.planName}>{planName}</Text>
                         <Text style={styles.planPeriod}>
-                            Plan {plan.period === 'annually' ? 'Anual' : 'Mensual'}
+                            Plan {plan?.period === 'annually' ? 'Anual' : 'Mensual'}
                         </Text>
                     </View>
 
                     <View style={styles.planPriceContainer}>
                         <Text style={styles.planPrice}>
-                            ${plan.price?.toLocaleString() || '0'}
+                            ${(plan?.price || 0).toLocaleString()}
                         </Text>
                         <Text style={styles.planPeriodText}>
-                            /{plan.period === 'annually' ? 'año' : 'mes'}
+                            /{plan?.period === 'annually' ? 'año' : 'mes'}
                         </Text>
                     </View>
                 </View>
@@ -239,6 +250,8 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
         </Animated.View>
     );
 };
+
+
 
 const FeatureHighlight = ({ icon, title, description, delay = 0 }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
