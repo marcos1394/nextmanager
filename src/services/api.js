@@ -201,6 +201,19 @@ export const createHelpArticle = async (articleData) => {
     }
 };
 
+/**
+ * Obtiene los detalles completos de la cuenta del usuario (Perfil, Plan, Restaurantes).
+ * Ruta protegida: El interceptor adjuntará el token automáticamente.
+ */
+export const getAccountDetails = async () => {
+    try {
+        const response = await api.get('/auth/account-details');
+        return response.data; // Devuelve { success: true, data: { profile: ..., plan: ... } }
+    } catch (error) {
+        throw error.response?.data || new Error('Error al obtener los detalles de la cuenta.');
+    }
+};
+
 // --- POS Service & Restaurant Service ---
 // (Aquí puedes añadir getPosLogbook, getFullRestaurantConfig, etc.)
 
