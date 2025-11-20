@@ -1,5 +1,5 @@
 // screens/MonitorScreen.js
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -22,74 +22,7 @@ import api from '../services/api';
 
 const { width, height } = Dimensions.get('window');
 
-// --- DATOS MEJORADOS ---
-const initialWaitersData = [
-    { 
-        id: '1', 
-        name: 'Ana López', 
-        avatar: 'AL', 
-        sales: 1250.50, 
-        tables: 8, 
-        orders: 24, 
-        avgTicket: 156.31,
-        efficiency: 94,
-        status: 'active',
-        lastOrder: '2 min',
-        section: 'A'
-    },
-    { 
-        id: '2', 
-        name: 'Juan García', 
-        avatar: 'JG', 
-        sales: 1890.00, 
-        tables: 11, 
-        orders: 32, 
-        avgTicket: 171.82,
-        efficiency: 98,
-        status: 'active',
-        lastOrder: '1 min',
-        section: 'B'
-    },
-    { 
-        id: '3', 
-        name: 'Sofía Martínez', 
-        avatar: 'SM', 
-        sales: 980.75, 
-        tables: 6, 
-        orders: 18, 
-        avgTicket: 163.46,
-        efficiency: 87,
-        status: 'break',
-        lastOrder: '15 min',
-        section: 'C'
-    },
-    { 
-        id: '4', 
-        name: 'Carlos Rodríguez', 
-        avatar: 'CR', 
-        sales: 2150.00, 
-        tables: 12, 
-        orders: 38, 
-        avgTicket: 179.17,
-        efficiency: 96,
-        status: 'active',
-        lastOrder: '30 seg',
-        section: 'D'
-    },
-    { 
-        id: '5', 
-        name: 'Laura Hernández', 
-        avatar: 'LH', 
-        sales: 1540.25, 
-        tables: 9, 
-        orders: 27, 
-        avgTicket: 171.14,
-        efficiency: 92,
-        status: 'active',
-        lastOrder: '3 min',
-        section: 'E'
-    },
-];
+
 
 // --- COMPONENTES MEJORADOS ---
 const AnimatedHeader = ({ totalSales, isLive }) => {
