@@ -57,7 +57,6 @@ const FloatingInputField = ({ icon, placeholder, value, onChangeText, secureText
         zIndex: 1,
     };
 
-    // --- FUNCIÓN QUE FALTABA ---
     const getBorderColor = () => {
         if (error) return '#FF6B6B';
         if (success) return '#4ADE80';
@@ -68,9 +67,12 @@ const FloatingInputField = ({ icon, placeholder, value, onChangeText, secureText
     return (
         <View style={[styles.inputContainer, { borderColor: getBorderColor() }]}>
             <Feather name={icon} size={20} color={isFocused ? "#FDB813" : "#666"} style={styles.inputIcon} />
-            <Animated.Text style={labelStyle}>
+            
+            {/* CORRECCIÓN 1: pointerEvents="none" permite que los clicks pasen al input */}
+            <Animated.Text style={labelStyle} pointerEvents="none">
                 {placeholder}
             </Animated.Text>
+            
             <TextInput
                 style={styles.input}
                 value={value}
@@ -81,8 +83,10 @@ const FloatingInputField = ({ icon, placeholder, value, onChangeText, secureText
                 keyboardType={keyboardType}
                 autoComplete={autoComplete}
                 autoCapitalize="none"
-                placeholderTextColor="transparent" // Ocultamos el placeholder nativo
+                placeholderTextColor="transparent"
+                cursorColor="#FDB813"
             />
+            
             {error && <Feather name="alert-circle" size={20} color="#FF6B6B" style={styles.statusIcon} />}
             {success && <Feather name="check-circle" size={20} color="#4ADE80" style={styles.statusIcon} />}
         </View>
@@ -344,28 +348,29 @@ const LoginScreen = () => {
         setFormErrors({});
 
         try {
-            // 1. Llamamos a la función 'login' de nuestro AuthContext.
-            // Esta se encarga de llamar a la API, guardar los tokens en SecureStore
-            // y actualizar el estado global 'user'.
-            // También nos devuelve la ruta de destino.
+            // 1. Llamamos al AuthContext
+            // (Esta función guarda tokens, actualiza el usuario y nos dice a dónde ir)
             const destination = await login(formData.email, formData.password);
 
             if (Platform.OS === 'ios') {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
 
-            // 2. Lógica de Redirección Inteligente
-            // Usamos 'navigation.replace' para que el usuario no pueda
-            // volver a la pantalla de Login con el botón "atrás".
+            // 2. Lógica de Redirección (Simplificada para Mobile)
+            
+            // CASO A: El usuario NO tiene un plan activo.
             if (destination === '/plans') {
-                navigation.replace('PlanSelection');
-            } else if (destination === '/restaurant-config') {
-                navigation.replace('RestaurantSetup');
-            } else {
-                navigation.replace('Dashboard');
+                navigation.replace('Plans'); 
+            } 
+            // CASO B: El usuario YA tiene plan.
+            // (Ya sea que vaya a '/dashboard' o '/restaurant-config', en mobile vamos al Monitor).
+            else {
+                // Omitimos la configuración de restaurante en mobile y vamos directo a la acción.
+                navigation.replace('Monitor'); 
             }
 
         } catch (error) {
+            console.error('[LoginScreen] Error:', error);
             const errorMessage = error.response?.data?.message || 'Credenciales inválidas o error de conexión.';
             setFormErrors({ general: errorMessage });
             
@@ -636,34 +641,36 @@ const styles = StyleSheet.create({
     formContainer: {
         marginBottom: 32,
     },
-    inputsContainer: {
-        marginBottom: 16,
-    },
-    inputWrapper: {
+   inputsContainer: {
         marginBottom: 20,
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 16,
-        paddingHorizontal: 16,
+        height: 60,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        minHeight: 64,
+        borderRadius: 12,
+        marginBottom: 20,
+        backgroundColor: '#1A1A1A',
+        paddingHorizontal: 15,
+        position: 'relative', // Necesario para el label absoluto
     },
     inputIcon: {
-        marginRight: 12,
-    },
-    inputContent: {
-        flex: 1,
-        position: 'relative',
+        marginRight: 10,
     },
     input: {
-        color: '#FFFFFF',
+        // CORRECCIÓN 2: flex: 1 es CRÍTICO para que el input ocupe el ancho disponible
+        flex: 1, 
+        color: '#FFFFFF', // Texto blanco para fondo oscuro
         fontSize: 16,
-        paddingVertical: 8,
+        height: '100%', // Altura completa para facilitar el toque
+        paddingVertical: 0, // Reseteo de padding
+        zIndex: 5, // Asegura que esté por encima para recibir clicks
     },
+    statusIcon: {
+        marginLeft: 10,
+    },
+    
     eyeButton: {
         padding: 4,
     },
