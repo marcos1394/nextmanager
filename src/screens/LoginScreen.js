@@ -462,7 +462,7 @@ const LoginScreen = () => {
                             >
                                 <View style={styles.logoContainer}>
                                     <View style={styles.logoBackground}>
-                                        <MaterialCommunityIcons name="restaurant" size={32} color="#FDB813" />
+                                        <MaterialCommunityIcons name="silverware-fork-knife" size={32} color="#FDB813" />
                                     </View>
                                 </View>
                                 
