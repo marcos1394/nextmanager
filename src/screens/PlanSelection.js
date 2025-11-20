@@ -24,6 +24,7 @@ import { getAvailablePlans } from '../services/api'; // <-- 1. IMPORTA LA FUNCIÃ
 
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth * 0.8;
+const CARD_SPACING = 20;
 // En tus estilos tienes un marginRight de 20, asÃ­ que el espacio total es:
 const ITEM_SIZE = CARD_WIDTH + 20;
 
