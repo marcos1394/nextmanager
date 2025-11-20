@@ -22,9 +22,10 @@ import { getAvailablePlans } from '../services/api'; // <-- 1. IMPORTA LA FUNCI�
 
 
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-const CARD_WIDTH = screenWidth - 40;
-const CARD_SPACING = 20;
+const { width: screenWidth } = Dimensions.get('window');
+const CARD_WIDTH = screenWidth * 0.8;
+// En tus estilos tienes un marginRight de 20, así que el espacio total es:
+const ITEM_SIZE = CARD_WIDTH + 20;
 
 
 
@@ -632,21 +633,47 @@ const PlanSelectionScreen = () => {
     >
         {/* Plans Carousel */}
         <View style={styles.carouselSection}>
-            <FlatList
-                ref={flatListRef}
-                data={plans}
-                renderItem={renderPlanCard}
-                keyExtractor={item => item.id}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={CARD_WIDTH + CARD_SPACING}
-                decelerationRate="fast"
-                contentContainerStyle={styles.carouselContent}
-                onScroll={handleScroll}
-                scrollEventThrottle={16}
-                initialScrollIndex={1} // Centrar en el plan recomendado
-            />
+           <FlatList
+    ref={flatListRef}
+    data={plans}
+    renderItem={renderPlanCard}
+    keyExtractor={item => item.id}
+    horizontal
+    pagingEnabled
+    showsHorizontalScrollIndicator={false}
+    
+    // Configuración de snapping
+    snapToInterval={CARD_WIDTH + 20} // CARD_WIDTH + marginRight
+    decelerationRate="fast"
+    
+    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+    onScroll={handleScroll}
+    scrollEventThrottle={16}
+    
+    // --- CORRECCIÓN 1: Centrado Inicial ---
+    // Si tienes 3 planes, el índice 1 es el del medio.
+    initialScrollIndex={plans.length > 1 ? 1 : 0} 
+    
+    // --- CORRECCIÓN 2: Cálculo de Layout (La Solución al Error) ---
+    // Esto le dice a RN cuánto mide cada item antes de renderizarlo.
+    // length: Ancho de la tarjeta + margen derecho (20)
+    // offset: (Ancho + margen) * índice
+    getItemLayout={(data, index) => ({
+        length: CARD_WIDTH + 20,
+        offset: (CARD_WIDTH + 20) * index,
+        index,
+    })}
+
+    // --- CORRECCIÓN 3: Fallback de Seguridad ---
+    // Si por alguna razón falla el cálculo, esto evita que la app crashee
+    // e intenta scrollear un poco después.
+    onScrollToIndexFailed={(info) => {
+        const wait = new Promise(resolve => setTimeout(resolve, 500));
+        wait.then(() => {
+            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+        });
+    }}
+/>
             
             {/* Dots Indicator */}
             <View style={styles.dotsContainer}>
