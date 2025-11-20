@@ -17,15 +17,12 @@ const api = axios.create({
 // ------------------------------------------------------------------
 
 // 2. Interceptor de Petición (Request)
-// Se ejecuta ANTES de que cualquier petición sea enviada.
 api.interceptors.request.use(
     async (config) => {
-        // --- LOG PARA TU TERMINAL ---
         console.log(`[API Request] 🚀 --> ${config.method.toUpperCase()} ${config.url}`);
         if (config.data) {
             console.log('[API Request] Payload:', JSON.stringify(config.data, null, 2));
         }
-        // --- FIN DE LOG ---
 
         const token = await SecureStore.getItemAsync('accessToken');
         if (token) {
@@ -34,50 +31,38 @@ api.interceptors.request.use(
         return config;
     },
     (error) => {
-        // Log si la petición ni siquiera se pudo configurar
         console.error('[API Request Error] Error al configurar la petición:', error.message);
         return Promise.reject(error);
     }
 );
 
 // 3. Interceptor de Respuesta (Response)
-// Se ejecuta DESPUÉS de recibir cualquier respuesta del backend.
 api.interceptors.response.use(
     (response) => {
-        // --- LOG PARA TU TERMINAL ---
-        // Loguea cualquier respuesta exitosa (2xx)
         console.log(`[API Response] ✅ <-- ${response.status} ${response.config.url}`);
-        // --- FIN DE LOG ---
         return response;
     },
     async (error) => {
         const originalRequest = error.config;
 
-        // --- LOG DE ERROR DETALLADO (PARA TU TERMINAL) ---
-        // Aquí es donde veremos el 502 Bad Gateway
-        console.error(`[API Error] ❌ !!!! ${error.config.method.toUpperCase()} ${error.config.url}`);
+        console.error(`[API Error] ❌ !!!! ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
         
         if (error.response) {
-            // El servidor respondió con un error (4xx, 5xx)
-            console.error('[API Error] Status:', error.response.status); // Ej: 502
-            console.error('[API Error] Data:', JSON.stringify(error.response.data, null, 2)); // Ej: El HTML de "Bad Gateway"
+            console.error('[API Error] Status:', error.response.status);
+            console.error('[API Error] Data:', JSON.stringify(error.response.data, null, 2));
         } else if (error.request) {
-            // La petición se hizo pero no hubo respuesta (ej. sin internet, 502)
             console.error('[API Error] No Response: El servidor no respondió o está caído.', error.message);
         } else {
-            // Error al configurar la petición
             console.error('[API Error] Request Setup Error:', error.message);
         }
-        // --- FIN DE LOG ---
 
-        // Lógica de Refresh Token (tu código actual)
+        // Lógica de Refresh Token
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
             try {
                 const refreshToken = await SecureStore.getItemAsync('refreshToken');
                 if (!refreshToken) return Promise.reject(error);
 
-                // El refresh-token no debe loguearse a sí mismo para evitar bucles
                 const rs = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
                 const { accessToken } = rs.data;
 
@@ -108,7 +93,41 @@ export const loginUser = async (email, password) => {
     return api.post('/auth/login', { email, password });
 };
 
-// (Aquí irían tus otras funciones de auth: logoutUser, passwordForgot, etc.)
+// ⭐ AGREGADO: Función logoutUser
+export const logoutUser = async () => {
+    try {
+        const response = await api.post('/auth/logout');
+        // Limpiar tokens del almacenamiento local
+        await SecureStore.deleteItemAsync('accessToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        return response.data;
+    } catch (error) {
+        // Incluso si el logout falla en el backend, limpiamos los tokens localmente
+        await SecureStore.deleteItemAsync('accessToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        throw error.response?.data || new Error('Error al cerrar sesión.');
+    }
+};
+
+// ⭐ AGREGADO: Función para recuperar contraseña
+export const forgotPassword = async (email) => {
+    try {
+        const response = await api.post('/auth/forgot-password', { email });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || new Error('Error al solicitar recuperación de contraseña.');
+    }
+};
+
+// ⭐ AGREGADO: Función para resetear contraseña
+export const resetPassword = async (token, newPassword) => {
+    try {
+        const response = await api.post('/auth/reset-password', { token, newPassword });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || new Error('Error al resetear la contraseña.');
+    }
+};
 
 // --- Payment Service ---
 export const getAvailablePlans = async () => {
