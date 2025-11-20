@@ -122,13 +122,18 @@ const PlanCard = ({ plan, delay = 0 }) => {
     }, [delay, scaleAnim, fadeAnim, shimmerAnim]);
 
     const getPlanColor = (planName) => {
+        // --- CORRECCIÓN DE SEGURIDAD ---
+        if (!planName) return ['#FDB813', '#F59E0B']; // Color por defecto si es undefined
+        
         if (planName.includes('Completo')) return ['#FDB813', '#F59E0B'];
         if (planName.includes('NexFactura')) return ['#6366F1', '#4F46E5'];
         if (planName.includes('NextManager')) return ['#10B981', '#059669'];
         return ['#FDB813', '#F59E0B'];
     };
 
-    const gradient = getPlanColor(plan.product);
+    // --- CORRECCIÓN: Usar product o name ---
+    const planName = plan?.product || plan?.name || 'Plan';
+    const gradient = getPlanColor(planName);
 
     return (
         <Animated.View
@@ -164,31 +169,31 @@ const PlanCard = ({ plan, delay = 0 }) => {
                             <Feather name="check-circle" size={16} color="#FFFFFF" />
                             <Text style={styles.planBadgeText}>SELECCIONADO</Text>
                         </View>
-                        {plan.period === 'annually' && (
+                        {plan?.period === 'annually' && (
                             <View style={styles.savingsBadge}>
                                 <Text style={styles.savingsBadgeText}>AHORRO 15%</Text>
                             </View>
                         )}
                     </View>
                     
-                    <Text style={styles.planName}>{plan.product}</Text>
+                    <Text style={styles.planName}>{planName}</Text>
                     <Text style={styles.planPeriod}>
-                        Plan {plan.period === 'annually' ? 'Anual' : 'Mensual'}
+                        Plan {plan?.period === 'annually' ? 'Anual' : 'Mensual'}
                     </Text>
                     
                     <View style={styles.planPriceContainer}>
                         <Text style={styles.planCurrency}>$</Text>
-                        <Text style={styles.planPrice}>{plan.price.toLocaleString()}</Text>
+                        <Text style={styles.planPrice}>{(plan?.price || 0).toLocaleString()}</Text>
                         <Text style={styles.planPeriodText}>
-                            /{plan.period === 'annually' ? 'año' : 'mes'}
+                            /{plan?.period === 'annually' ? 'año' : 'mes'}
                         </Text>
                     </View>
 
-                    {plan.period === 'annually' && (
+                    {plan?.period === 'annually' && (
                         <View style={styles.planHighlight}>
                             <MaterialCommunityIcons name="trending-up" size={16} color="#10B981" />
                             <Text style={styles.planHighlightText}>
-                                ¡Mejor opción! Ahorras $1,324 al año
+                                ¡Mejor opción! Ahorras ${(plan.price * 0.15).toFixed(0)} al año
                             </Text>
                         </View>
                     )}
