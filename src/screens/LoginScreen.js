@@ -25,155 +25,66 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // --- COMPONENTES UI MEJORADOS ---
 
-const FloatingInputField = ({ 
-    icon, 
-    placeholder, 
-    value, 
-    onChangeText, 
-    secureTextEntry = false, 
-    keyboardType = 'default',
-    error = null,
-    success = false,
-    autoComplete = 'off'
-}) => {
+const FloatingInputField = ({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoComplete, error, success }) => {
     const [isFocused, setIsFocused] = useState(false);
-    const [isPasswordVisible, setIsPasswordVisible] = useState(!secureTextEntry);
-    const animatedIsFocused = useRef(new Animated.Value(value ? 1 : 0)).current;
-    const shakeAnimation = useRef(new Animated.Value(0)).current;
-    const successAnimation = useRef(new Animated.Value(0)).current;
+    const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
 
     useEffect(() => {
-        Animated.timing(animatedIsFocused, {
+        Animated.timing(animatedLabel, {
             toValue: (isFocused || value) ? 1 : 0,
             duration: 200,
             useNativeDriver: false,
         }).start();
-    }, [animatedIsFocused, isFocused, value]);
-
-    useEffect(() => {
-        if (error) {
-            Animated.sequence([
-                Animated.timing(shakeAnimation, { toValue: 10, duration: 100, useNativeDriver: true }),
-                Animated.timing(shakeAnimation, { toValue: -10, duration: 100, useNativeDriver: true }),
-                Animated.timing(shakeAnimation, { toValue: 10, duration: 100, useNativeDriver: true }),
-                Animated.timing(shakeAnimation, { toValue: 0, duration: 100, useNativeDriver: true }),
-            ]).start();
-            
-            if (Platform.OS === 'ios') {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
-        }
-    }, [error, shakeAnimation]);
-
-    useEffect(() => {
-        if (success && !error) {
-            Animated.sequence([
-                Animated.timing(successAnimation, { toValue: 1, duration: 200, useNativeDriver: true }),
-                Animated.timing(successAnimation, { toValue: 0.8, duration: 100, useNativeDriver: true }),
-                Animated.timing(successAnimation, { toValue: 1, duration: 100, useNativeDriver: true }),
-            ]).start();
-        }
-    }, [success, error, successAnimation]);
+    }, [isFocused, value]);
 
     const labelStyle = {
         position: 'absolute',
-        left: 50,
-        top: animatedIsFocused.interpolate({
+        left: 40,
+        top: animatedLabel.interpolate({
             inputRange: [0, 1],
-            outputRange: [20, 8],
+            outputRange: [18, -10],
         }),
-        fontSize: animatedIsFocused.interpolate({
+        fontSize: animatedLabel.interpolate({
             inputRange: [0, 1],
             outputRange: [16, 12],
         }),
-        color: animatedIsFocused.interpolate({
+        color: animatedLabel.interpolate({
             inputRange: [0, 1],
-            outputRange: ['#888', getBorderColor()],
+            outputRange: ['#888', '#FDB813'],
         }),
-        fontWeight: animatedIsFocused.interpolate({
-            inputRange: [0, 1],
-            outputRange: ['400', '500'],
-        }),
+        backgroundColor: '#1A1A1A', // Del color del fondo para tapar el borde
+        paddingHorizontal: 4,
+        zIndex: 1,
     };
 
+    // --- FUNCIÓN QUE FALTABA ---
     const getBorderColor = () => {
         if (error) return '#FF6B6B';
-        if (success && !error) return '#10B981';
+        if (success) return '#4ADE80';
         if (isFocused) return '#FDB813';
-        return 'rgba(255, 255, 255, 0.1)';
-    };
-
-    const getIconColor = () => {
-        if (error) return '#FF6B6B';
-        if (success && !error) return '#10B981';
-        if (isFocused) return '#FDB813';
-        return '#888';
+        return '#333333';
     };
 
     return (
-        <View style={styles.inputWrapper}>
-            <Animated.View 
-                style={[
-                    styles.inputContainer, 
-                    { 
-                        borderColor: getBorderColor(),
-                        transform: [{ translateX: shakeAnimation }]
-                    }
-                ]}
-            >
-                <Animated.View style={{ transform: [{ scale: success ? successAnimation : 1 }] }}>
-                    <Feather 
-                        name={icon} 
-                        size={20} 
-                        color={getIconColor()} 
-                        style={styles.inputIcon} 
-                    />
-                </Animated.View>
-                
-                <View style={styles.inputContent}>
-                    <Animated.Text style={labelStyle}>
-                        {placeholder}
-                    </Animated.Text>
-                    <TextInput
-                        style={[styles.input, { paddingTop: (isFocused || value) ? 22 : 0 }]}
-                        value={value}
-                        onChangeText={onChangeText}
-                        secureTextEntry={secureTextEntry && !isPasswordVisible}
-                        keyboardType={keyboardType}
-                        autoCapitalize="none"
-                        autoComplete={autoComplete}
-                        onFocus={() => setIsFocused(true)}
-                        onBlur={() => setIsFocused(false)}
-                        placeholderTextColor="transparent"
-                    />
-                </View>
-                
-                {secureTextEntry && (
-                    <TouchableOpacity 
-                        onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                        style={styles.eyeButton}
-                    >
-                        <Feather 
-                            name={isPasswordVisible ? 'eye-off' : 'eye'} 
-                            size={20} 
-                            color={isFocused ? '#FDB813' : '#888'} 
-                        />
-                    </TouchableOpacity>
-                )}
-                
-                {success && !secureTextEntry && !error && (
-                    <Animated.View style={{ transform: [{ scale: successAnimation }] }}>
-                        <Feather name="check-circle" size={20} color="#10B981" />
-                    </Animated.View>
-                )}
-            </Animated.View>
-            
-            {error && (
-                <Animated.View style={styles.errorContainer}>
-                    <Feather name="alert-circle" size={14} color="#FF6B6B" />
-                    <Text style={styles.errorText}>{error}</Text>
-                </Animated.View>
-            )}
+        <View style={[styles.inputContainer, { borderColor: getBorderColor() }]}>
+            <Feather name={icon} size={20} color={isFocused ? "#FDB813" : "#666"} style={styles.inputIcon} />
+            <Animated.Text style={labelStyle}>
+                {placeholder}
+            </Animated.Text>
+            <TextInput
+                style={styles.input}
+                value={value}
+                onChangeText={onChangeText}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                secureTextEntry={secureTextEntry}
+                keyboardType={keyboardType}
+                autoComplete={autoComplete}
+                autoCapitalize="none"
+                placeholderTextColor="transparent" // Ocultamos el placeholder nativo
+            />
+            {error && <Feather name="alert-circle" size={20} color="#FF6B6B" style={styles.statusIcon} />}
+            {success && <Feather name="check-circle" size={20} color="#4ADE80" style={styles.statusIcon} />}
         </View>
     );
 };
