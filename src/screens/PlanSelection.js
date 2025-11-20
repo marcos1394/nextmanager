@@ -551,7 +551,7 @@ const PlanSelectionScreen = () => {
         features: plan.features
     };
     // Pasamos este nuevo objeto a la siguiente pantalla
-    navigation.navigate('PaymentGateway', { selectedPlan: selectedData });
+    navigation.navigate('Payment', { selectedPlan: selectedData });
 };
 
     const renderPlanCard = ({ item, index }) => (
