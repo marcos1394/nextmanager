@@ -188,10 +188,29 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const [isPressed, setIsPressed] = useState(false);
     
-    const currentPrice = plan.price[billingCycle];
-    const originalPrice = plan.originalPrice[billingCycle];
+    // --- CORRECCIÓN DE LÓGICA DE PRECIOS ---
+    
+    // 1. Obtenemos el precio real a pagar según el ciclo
+    const currentPrice = billingCycle === 'annually' ? plan.price_annually : plan.price_monthly;
+    
+    // 2. Calculamos el "precio original" (anchor) para mostrar el ahorro.
+    //    Si es anual, el precio original es (precio mensual * 12).
+    const originalPrice = billingCycle === 'annually' ? (plan.price_monthly * 12) : null;
+    
+    // 3. Calculamos cuánto se muestra por mes (para marketing)
     const pricePerMonth = billingCycle === 'annually' ? Math.round(currentPrice / 12) : currentPrice;
-    const discount = originalPrice ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) : 0;
+    
+    // 4. Calculamos el porcentaje de descuento real
+    const discount = (billingCycle === 'annually' && originalPrice > 0) 
+        ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) 
+        : 0;
+
+    // 5. Definimos colores por defecto si el backend no los manda
+    const defaultGradient = plan.isHighlighted 
+        ? ['#252525', '#151515'] 
+        : ['#1E1E1E', '#121212'];
+
+    // --- FIN DE CORRECCIONES ---
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -234,19 +253,11 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
     };
 
     const handleSelect = () => {
-        const selectedOption = {
-            product: plan.name,
-            name: `Plan ${billingCycle === 'monthly' ? 'Mensual' : 'Anual'}`,
-            price: currentPrice,
-            period: billingCycle,
-            planId: plan.id,
-        };
-        
         if (Platform.OS === 'ios') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
-        
-        onSelect(selectedOption);
+        // Pasamos el objeto plan original, la pantalla padre se encargará de formatearlo
+        onSelect(plan);
     };
 
     return (
@@ -266,7 +277,8 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
                 style={styles.cardTouchable}
             >
                 <LinearGradient
-                    colors={plan.gradient}
+                    // Usamos el gradiente del plan si existe, si no, uno por defecto
+                    colors={plan.gradient || defaultGradient}
                     style={[
                         styles.planCard,
                         plan.isHighlighted && styles.highlightedCard
@@ -276,10 +288,13 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
                 >
                     {/* Header con badge y descuento */}
                     <View style={styles.cardHeader}>
-                        {plan.badge && (
-                            <View style={styles.popularBadge}>
-                                <Feather name="star" size={12} color="#121212" />
-                                <Text style={styles.popularBadgeText}>{plan.badge}</Text>
+                        {/* Usamos 'tagline' del backend como badge */}
+                        {plan.tagline && (
+                            <View style={[styles.popularBadge, plan.isHighlighted ? { backgroundColor: '#FDB813' } : { backgroundColor: '#333' }]}>
+                                <Feather name={plan.isHighlighted ? "star" : "tag"} size={12} color={plan.isHighlighted ? "#121212" : "#FFF"} />
+                                <Text style={[styles.popularBadgeText, plan.isHighlighted ? { color: '#121212' } : { color: '#FFF' }]}>
+                                    {plan.tagline}
+                                </Text>
                             </View>
                         )}
                         
@@ -292,7 +307,6 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
 
                     {/* Información del plan */}
                     <View style={styles.planInfo}>
-                        <Text style={styles.planTagline}>{plan.tagline}</Text>
                         <Text style={[
                             styles.planName,
                             plan.isHighlighted && styles.planNameHighlighted
@@ -302,8 +316,8 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
                         <Text style={[
                             styles.planDescription,
                             plan.isHighlighted && styles.planDescriptionHighlighted
-                        ]}>
-                            {plan.description}
+                        ]} numberOfLines={2}>
+                            {plan.description || "La mejor opción para tu negocio."}
                         </Text>
                     </View>
 
@@ -331,18 +345,16 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
                         </View>
                         
                         {billingCycle === 'annually' && (
-                            <View style={styles.billingInfo}>
+                            <View style={styles.billingDetails}>
                                 <Text style={[
                                     styles.billingNotice,
                                     plan.isHighlighted && styles.billingNoticeHighlighted
                                 ]}>
                                     Facturado anualmente: ${currentPrice.toLocaleString()}
                                 </Text>
-                                {originalPrice && (
-                                    <Text style={[
-                                        styles.originalPrice,
-                                        plan.isHighlighted && styles.originalPriceHighlighted
-                                    ]}>
+                                {/* Mostramos el precio "tachado" si existe ahorro */}
+                                {originalPrice > currentPrice && (
+                                    <Text style={styles.originalPrice}>
                                         Antes: ${originalPrice.toLocaleString()}
                                     </Text>
                                 )}
@@ -360,70 +372,51 @@ const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
                         </Text>
                         
                         <View style={styles.featuresList}>
-                            {plan.features.map((feature, featureIndex) => (
-                                <FeatureItem
-                                    key={feature.text}
-                                    feature={feature}
-                                    isHighlighted={plan.isHighlighted}
-                                    delay={featureIndex * 100}
-                                />
+                            {/* 1. Mostramos los timbres primero */}
+                            <View style={styles.featureRow}>
+                                <MaterialCommunityIcons name="ticket-confirmation" size={20} color="#10B981" />
+                                <Text style={styles.featureText}>
+                                    {plan.timbres > 0 ? `${plan.timbres} Timbres` : 'Sin timbres incluidos'}
+                                </Text>
+                            </View>
+
+                            {/* 2. Iteramos sobre el array de features (con seguridad) */}
+                            {Array.isArray(plan.features) && plan.features.map((feature, index) => (
+                                <View key={index} style={styles.featureRow}>
+                                    <Feather name="check" size={18} color="#FDB813" />
+                                    {/* Manejamos si feature es objeto o string */}
+                                    <Text style={styles.featureText}>
+                                        {typeof feature === 'string' ? feature : feature.text}
+                                    </Text>
+                                </View>
                             ))}
                         </View>
-
-                        {plan.limitations.length > 0 && (
-                            <View style={styles.limitationsSection}>
-                                <Text style={[
-                                    styles.limitationsTitle,
-                                    plan.isHighlighted && styles.limitationsTitleHighlighted
-                                ]}>
-                                    Limitaciones:
-                                </Text>
-                                {plan.limitations.map((limitation, limitIndex) => (
-                                    <View key={limitIndex} style={styles.limitationItem}>
-                                        <Feather 
-                                            name="minus" 
-                                            size={12} 
-                                            color={plan.isHighlighted ? 'rgba(18, 18, 18, 0.4)' : 'rgba(255, 255, 255, 0.4)'} 
-                                        />
-                                        <Text style={[
-                                            styles.limitationText,
-                                            plan.isHighlighted && styles.limitationTextHighlighted
-                                        ]}>
-                                            {limitation}
-                                        </Text>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
                     </View>
 
                     {/* CTA Button */}
-                    <TouchableOpacity
+                    <TouchableOpacity 
                         style={[
-                            styles.selectButton,
-                            plan.isHighlighted ? styles.selectButtonHighlighted : styles.selectButtonDefault
+                            styles.selectButton, 
+                            plan.isHighlighted ? styles.buttonHighlighted : styles.buttonDefault
                         ]}
                         onPress={handleSelect}
-                        activeOpacity={0.85}
+                        activeOpacity={0.8}
                     >
                         <LinearGradient
                             colors={plan.isHighlighted 
-                                ? ['#121212', '#2a2a2a'] 
-                                : ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']
+                                ? ['#FDB813', '#F59E0B'] 
+                                : ['#333', '#222']
                             }
                             style={styles.selectButtonGradient}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
                         >
                             <Text style={[
-                                styles.selectButtonText,
-                                plan.isHighlighted && styles.selectButtonTextHighlighted
+                                styles.buttonText, 
+                                plan.isHighlighted && styles.textHighlighted
                             ]}>
-                                Comenzar con {plan.tagline}
+                                Elegir Plan
                             </Text>
-                            <Feather 
-                                name="arrow-right" 
-                                size={18} 
-                                color={plan.isHighlighted ? '#FFFFFF' : '#FFFFFF'} 
-                            />
                         </LinearGradient>
                     </TouchableOpacity>
                 </LinearGradient>
