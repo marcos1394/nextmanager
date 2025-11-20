@@ -12,7 +12,6 @@ export const AuthProvider = ({ children }) => {
     /**
      * Función interna para manejar el éxito de la autenticación.
      * Guarda tokens y actualiza el estado del usuario.
-     * Esta es la fuente única de verdad para el estado de login.
      */
     const handleAuthSuccess = async (data) => {
         const { accessToken, refreshToken, user } = data;
@@ -21,43 +20,44 @@ export const AuthProvider = ({ children }) => {
             throw new Error("Respuesta de autenticación inválida.");
         }
 
-        // 1. Guardamos ambos tokens en la "caja fuerte" del dispositivo
+        // 1. Guardamos ambos tokens
         await SecureStore.setItemAsync('accessToken', accessToken);
         await SecureStore.setItemAsync('refreshToken', refreshToken);
         
-        // 2. Actualizamos la instancia de API para usar el nuevo token en
-        //    todas las futuras peticiones de esta sesión.
+        // 2. Actualizamos la instancia de API
         api.defaults.headers.common['Authorization'] = accessToken;
         
-        // 3. Actualizamos el estado del usuario en React
+        // 3. Actualizamos el estado
         setUser(user);
     };
 
     /**
      * Verifica si ya existe una sesión válida al iniciar la app.
+     * Retorna los datos del usuario para uso inmediato.
      */
     const verifySession = useCallback(async () => {
         try {
             const accessToken = await SecureStore.getItemAsync('accessToken');
             if (!accessToken) {
-                return; // No hay sesión guardada
+                return null; // No hay sesión
             }
             
-            // Adjunta el token a la instancia de api para la primera llamada
             api.defaults.headers.common['Authorization'] = accessToken;
 
-            // Llama al endpoint protegido
-            const response = await getAccountDetails(); // Usa la función de api.js
+            const response = await getAccountDetails(); 
             
             if (response.success) {
                 setUser(response.data);
+                return response.data; // <-- CORRECCIÓN: Devolvemos los datos
             } else {
                 setUser(null);
+                return null;
             }
         } catch (error) {
             console.error("Fallo la verificación de la sesión:", error.message);
-            // El interceptor de api.js intentará refrescar. Si falla, el usuario quedará null.
+            // Si falla (y el refresh token también falla), limpiamos el usuario
             setUser(null);
+            return null;
         } finally {
             setIsLoading(false);
         }
@@ -69,45 +69,69 @@ export const AuthProvider = ({ children }) => {
     }, [verifySession]);
 
     /**
-     * Maneja el inicio de sesión del usuario.
+     * Maneja el inicio de sesión y devuelve la ruta de redirección.
      */
     const login = async (email, password) => {
         try {
-            const response = await loginUser(email, password); // Usa la función de api.js
+            // 1. Llamada a la API
+            const response = await loginUser(email, password); 
+            
+            // 2. Guardado de sesión
             await handleAuthSuccess(response.data);
-            return response.data; // Devuelve los datos al componente
+            
+            // 3. Obtención de datos frescos y completos (incluyendo 'plan' y 'restaurants')
+            const userData = await verifySession();
+
+            if (!userData) {
+                throw new Error('Error al verificar el perfil del usuario.');
+            }
+
+            // 4. Lógica de Redirección Inteligente
+            // Caso A: Sin plan
+            if (!userData.plan?.name || userData.plan.name === 'Sin Plan Activo') {
+                return '/plans';
+            }
+            
+            // Caso B: Con plan pero sin configurar (En mobile esto va al dashboard igual)
+            if (!userData.restaurants || userData.restaurants.length === 0) {
+                // return '/restaurant-config'; // En web iríamos aquí
+                return '/dashboard'; // En mobile vamos directo al dashboard
+            }
+            
+            // Caso C: Todo listo
+            return '/dashboard';
+
         } catch (error) {
-            await logout(); // Llama a la función de logout para limpiar todo
+            await logout(); 
             throw error;
         }
     };
 
     /**
-     * Maneja el registro de un nuevo usuario.
+     * Maneja el registro.
      */
     const register = async (registrationData) => {
         try {
-            const response = await registerUser(registrationData); // Usa la función de api.js
+            const response = await registerUser(registrationData);
             await handleAuthSuccess(response.data);
-            return response.data; // Devuelve los datos al componente
+            // El registro siempre redirige a planes, así que no necesitamos lógica compleja aquí
+            return response.data;
         } catch (error) {
-            await logout(); // Llama a la función de logout para limpiar todo
+            await logout();
             throw error;
         }
     };
 
     /**
-     * Maneja el cierre de sesión del usuario.
+     * Cierra sesión.
      */
     const logout = async () => {
-        // Notificamos al backend PRIMERO, mientras aún tenemos el token
         try {
-            await logoutUser(); // Usa la función de api.js
+            await logoutUser(); 
         } catch (error) {
             console.error("Error notificando al backend sobre el logout:", error);
         }
         
-        // Limpiamos todo localmente
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
         delete api.defaults.headers.common['Authorization'];
@@ -119,15 +143,14 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!user,
         isLoading,
         login,
-        register, // <-- Exportamos la nueva función de registro
+        register,
         logout,
-        verifySession // <-- Exportamos verifySession para uso futuro
+        verifySession
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// Hook personalizado para usar el contexto
 export const useAuth = () => {
     const context = useContext(AuthContext);
     if (!context) {
