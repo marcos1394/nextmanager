@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -9,287 +9,100 @@ import {
     StatusBar,
     FlatList,
     Platform,
-    SafeAreaView,
-    Image,
+    SafeAreaView
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from 'expo-haptics'; // Feedback táctil profesional
 
 const { width, height } = Dimensions.get('window');
 
-// --- CONSTANTES DE DISEÑO OPTIMIZADAS ---
+// --- CONSTANTES DE DISEÑO ---
 const COLORS = {
-    primary: '#FDB813',
-    secondary: '#FFAA00',
-    accent: '#FF6B35',
-    background: '#0A0A0A',
-    surface: '#1A1A1A',
-    surfaceLight: '#252525',
+    primary: '#FDB813',     // Amarillo Gold
+    secondary: '#FFAA00',   // Naranja Gold
+    background: '#121212',  // Negro profundo
+    surface: '#1E1E1E',     // Gris oscuro para tarjetas
     text: '#FFFFFF',
-    textSecondary: '#B8B8B8',
-    textDim: '#808080',
-    success: '#00D084',
-    border: 'rgba(253, 184, 19, 0.2)',
+    textDim: '#A9A9A9',
 };
 
-const SPACING = {
-    xs: 4,
-    sm: 8,
-    md: 16,
-    lg: 24,
-    xl: 32,
-    xxl: 48,
-};
-
-const TYPOGRAPHY = {
-    hero: 42,
-    h1: 32,
-    h2: 24,
-    h3: 20,
-    body: 16,
-    bodyLarge: 18,
-    caption: 14,
-    small: 12,
-};
-
-// --- DATOS DEL ONBOARDING MEJORADOS ---
 const ONBOARDING_DATA = [
     {
         key: '1',
-        icon: 'cash-register',
-        title: 'Aumenta Ventas 30%',
-        description: 'Dashboard en tiempo real que identifica tus platillos más rentables y horarios pico.',
-        metric: '+$15,000 MXN/mes promedio',
-        color: '#00D084',
+        icon: 'chart-timeline-variant',
+        title: 'Control Total',
+        description: 'Monitorea tus ventas y métricas en tiempo real. Tu restaurante, en tu bolsillo.',
     },
     {
         key: '2',
-        icon: 'chart-line',
-        title: 'Reduce Desperdicio',
-        description: 'IA que predice demanda exacta. Ahorra hasta $5,000 mensuales en inventario no utilizado.',
-        metric: '-40% desperdicio',
-        color: '#FDB813',
+        icon: 'brain', // Icono más moderno para "Inteligencia"
+        title: 'Decisiones Inteligentes',
+        description: 'Transforma datos en estrategias. Optimiza tu menú basándote en tendencias reales.',
     },
     {
         key: '3',
-        icon: 'bell-alert',
-        title: 'Control 24/7',
-        description: 'Alertas instantáneas sobre stock crítico, ventas inusuales y oportunidades perdidas.',
-        metric: 'Respuesta en <2 min',
-        color: '#FF6B35',
+        icon: 'radar', // Icono para "Detección/Alertas"
+        title: 'Siempre Alerta',
+        description: 'Recibe notificaciones instantáneas sobre inventario crítico y anomalías en ventas.',
     },
 ];
 
-const SOCIAL_PROOF = {
-    restaurants: '12,000+',
-    rating: '4.9',
-    savings: '$8M MXN',
-};
-
-// --- COMPONENTE: HERO SECTION (NUEVA) ---
-const HeroSection = ({ onGetStarted, onLogin }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(50)).current;
-
-    useEffect(() => {
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 800,
-                useNativeDriver: true,
-            }),
-            Animated.spring(slideAnim, {
-                toValue: 0,
-                tension: 50,
-                friction: 8,
-                useNativeDriver: true,
-            }),
-        ]).start();
-    }, []);
-
-    return (
-        <View style={styles.heroContainer}>
-            <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-            
-            {/* Fondo con gradiente sutil */}
-            <LinearGradient
-                colors={['#0A0A0A', '#1A1A1A', '#0A0A0A']}
-                locations={[0, 0.5, 1]}
-                style={StyleSheet.absoluteFillObject}
-            />
-
-            {/* Elementos decorativos de fondo */}
-            <View style={styles.decorativeCircle1} />
-            <View style={styles.decorativeCircle2} />
-
-            <SafeAreaView style={styles.heroContent}>
-                <Animated.View style={[styles.heroTop, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-                    {/* Logo/Badge Premium */}
-                    <View style={styles.brandBadge}>
-                        <LinearGradient
-                            colors={[COLORS.primary, COLORS.secondary]}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.brandBadgeGradient}
-                        >
-                            <MaterialCommunityIcons name="storefront" size={28} color="#0A0A0A" />
-                        </LinearGradient>
-                    </View>
-
-                    {/* Tagline principal */}
-                    <Text style={styles.heroTitle}>
-                        Tu Restaurante,{'\n'}
-                        <Text style={styles.heroTitleAccent}>Más Rentable</Text>
-                    </Text>
-                    
-                    <Text style={styles.heroSubtitle}>
-                        Plataforma de gestión que aumenta ventas y reduce costos con inteligencia artificial
-                    </Text>
-
-                    {/* Social Proof compacto */}
-                    <View style={styles.socialProofContainer}>
-                        <View style={styles.socialProofItem}>
-                            <MaterialCommunityIcons name="store-check" size={16} color={COLORS.success} />
-                            <Text style={styles.socialProofText}>{SOCIAL_PROOF.restaurants} restaurantes</Text>
-                        </View>
-                        <View style={styles.socialProofDivider} />
-                        <View style={styles.socialProofItem}>
-                            <MaterialCommunityIcons name="star" size={16} color={COLORS.primary} />
-                            <Text style={styles.socialProofText}>{SOCIAL_PROOF.rating} rating</Text>
-                        </View>
-                        <View style={styles.socialProofDivider} />
-                        <View style={styles.socialProofItem}>
-                            <MaterialCommunityIcons name="currency-usd" size={16} color={COLORS.success} />
-                            <Text style={styles.socialProofText}>{SOCIAL_PROOF.savings} ahorrados</Text>
-                        </View>
-                    </View>
-
-                    {/* CTAs principales */}
-                    <View style={styles.heroCTAContainer}>
-                        <TouchableOpacity 
-                            style={styles.primaryCTA} 
-                            onPress={onGetStarted}
-                            activeOpacity={0.85}
-                            accessible={true}
-                            accessibilityLabel="Comenzar prueba gratuita de 30 días"
-                            accessibilityRole="button"
-                        >
-                            <LinearGradient
-                                colors={[COLORS.primary, COLORS.secondary]}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 0 }}
-                                style={styles.primaryCTAGradient}
-                            >
-                                <View style={styles.ctaContent}>
-                                    <Text style={styles.primaryCTAText}>Probar 30 Días Gratis</Text>
-                                    <View style={styles.ctaBadge}>
-                                        <Text style={styles.ctaBadgeText}>Sin tarjeta</Text>
-                                    </View>
-                                </View>
-                                <Feather name="arrow-right" size={22} color="#0A0A0A" />
-                            </LinearGradient>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                            style={styles.secondaryCTA}
-                            onPress={onLogin}
-                            activeOpacity={0.7}
-                            accessible={true}
-                            accessibilityLabel="Iniciar sesión"
-                            accessibilityRole="button"
-                        >
-                            <Text style={styles.secondaryCTAText}>¿Ya tienes cuenta? </Text>
-                            <Text style={styles.secondaryCTATextBold}>Inicia sesión</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Indicador de scroll */}
-                    <View style={styles.scrollIndicator}>
-                        <Feather name="chevron-down" size={20} color={COLORS.textDim} />
-                        <Text style={styles.scrollIndicatorText}>Conoce los beneficios</Text>
-                    </View>
-                </Animated.View>
-            </SafeAreaView>
-        </View>
-    );
-};
-
-// --- COMPONENTE: ITEM DEL ONBOARDING MEJORADO ---
+// --- COMPONENTE: ITEM DEL CARRUSEL (CON PARALLAX) ---
 const OnboardingItem = ({ item, scrollX, index }) => {
+    // Interpolaciones para efectos Parallax
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
     
-    const scale = scrollX.interpolate({
+    // El icono se mueve un poco más lento que el texto (Parallax)
+    const iconTranslateY = scrollX.interpolate({
         inputRange,
-        outputRange: [0.85, 1, 0.85],
+        outputRange: [0, 0, 0], // Mantener centrado, pero podríamos moverlo
+    });
+
+    const iconScale = scrollX.interpolate({
+        inputRange,
+        outputRange: [0.5, 1, 0.5],
         extrapolate: 'clamp',
     });
     
-    const opacity = scrollX.interpolate({
+    const textOpacity = scrollX.interpolate({
         inputRange,
-        outputRange: [0.4, 1, 0.4],
+        outputRange: [0, 1, 0],
         extrapolate: 'clamp',
     });
 
-    const translateY = scrollX.interpolate({
+    const textTranslate = scrollX.interpolate({
         inputRange,
-        outputRange: [30, 0, 30],
+        outputRange: [50, 0, -50],
         extrapolate: 'clamp',
     });
 
     return (
-        <View style={styles.onboardingItemContainer}>
+        <View style={styles.itemContainer}>
             <Animated.View style={[
-                styles.onboardingCard,
-                { 
-                    transform: [{ scale }, { translateY }],
-                    opacity,
-                }
+                styles.iconContainer, 
+                { transform: [{ scale: iconScale }, { translateY: iconTranslateY }] }
             ]}>
-                {/* Indicador de color personalizado */}
-                <View style={[styles.colorIndicator, { backgroundColor: item.color }]} />
-                
-                <View style={styles.cardContent}>
-                    {/* Icono con fondo de color */}
-                    <View style={[styles.iconWrapper, { backgroundColor: `${item.color}15` }]}>
-                        <MaterialCommunityIcons 
-                            name={item.icon} 
-                            size={48} 
-                            color={item.color} 
-                        />
-                    </View>
+                {/* Círculo decorativo con gradiente sutil */}
+                <LinearGradient
+                    colors={['rgba(253, 184, 19, 0.2)', 'rgba(253, 184, 19, 0.05)']}
+                    style={styles.iconBackground}
+                >
+                    <MaterialCommunityIcons name={item.icon} size={80} color={COLORS.primary} />
+                </LinearGradient>
+            </Animated.View>
 
-                    {/* Métrica destacada */}
-                    <View style={styles.metricBadge}>
-                        <Text style={[styles.metricText, { color: item.color }]}>
-                            {item.metric}
-                        </Text>
-                    </View>
-
-                    {/* Contenido */}
-                    <Text style={styles.cardTitle}>{item.title}</Text>
-                    <Text style={styles.cardDescription}>{item.description}</Text>
-
-                    {/* Checkmarks de beneficios */}
-                    <View style={styles.benefitsContainer}>
-                        <View style={styles.benefitItem}>
-                            <Feather name="check-circle" size={16} color={COLORS.success} />
-                            <Text style={styles.benefitText}>Sin instalación</Text>
-                        </View>
-                        <View style={styles.benefitItem}>
-                            <Feather name="check-circle" size={16} color={COLORS.success} />
-                            <Text style={styles.benefitText}>Soporte 24/7</Text>
-                        </View>
-                    </View>
-                </View>
+            <Animated.View style={{ opacity: textOpacity, transform: [{ translateX: textTranslate }] }}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.description}>{item.description}</Text>
             </Animated.View>
         </View>
     );
 };
 
-// --- COMPONENTE: PAGINADOR MEJORADO ---
-const Paginator = ({ data, scrollX, currentIndex }) => {
+// --- COMPONENTE: PAGINADOR ---
+const Paginator = ({ data, scrollX }) => {
     return (
         <View style={styles.paginatorContainer}>
             {data.map((_, i) => {
@@ -297,7 +110,7 @@ const Paginator = ({ data, scrollX, currentIndex }) => {
                 
                 const dotWidth = scrollX.interpolate({
                     inputRange,
-                    outputRange: [8, 28, 8],
+                    outputRange: [10, 25, 10], // El punto activo se estira
                     extrapolate: 'clamp',
                 });
 
@@ -310,45 +123,10 @@ const Paginator = ({ data, scrollX, currentIndex }) => {
                 return (
                     <Animated.View 
                         key={i.toString()} 
-                        style={[
-                            styles.paginatorDot, 
-                            { 
-                                width: dotWidth, 
-                                opacity,
-                                backgroundColor: i === currentIndex ? COLORS.primary : COLORS.textDim,
-                            }
-                        ]} 
+                        style={[styles.dot, { width: dotWidth, opacity }]} 
                     />
                 );
             })}
-        </View>
-    );
-};
-
-// --- COMPONENTE: FOOTER CON TESTIMONIAL ---
-const TestimonialFooter = () => {
-    return (
-        <View style={styles.testimonialContainer}>
-            <View style={styles.testimonialCard}>
-                <View style={styles.quoteIcon}>
-                    <MaterialCommunityIcons name="format-quote-close" size={24} color={COLORS.primary} />
-                </View>
-                <Text style={styles.testimonialText}>
-                    "Recuperé la inversión en 3 semanas. Ahora sé exactamente qué vender y cuándo"
-                </Text>
-                <View style={styles.testimonialAuthor}>
-                    <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarText}>MC</Text>
-                    </View>
-                    <View>
-                        <Text style={styles.authorName}>María Contreras</Text>
-                        <Text style={styles.authorRole}>Dueña, Taquería El Fogón</Text>
-                    </View>
-                    <View style={styles.verifiedBadge}>
-                        <Feather name="check" size={10} color="#fff" />
-                    </View>
-                </View>
-            </View>
         </View>
     );
 };
@@ -359,93 +137,57 @@ export default function LandingPage() {
     const scrollX = useRef(new Animated.Value(0)).current;
     const slidesRef = useRef(null);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const [showHero, setShowHero] = useState(true);
-    const [skipVisible, setSkipVisible] = useState(false);
 
-    // Mostrar botón skip después de 3 segundos
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setSkipVisible(true);
-        }, 3000);
-        return () => clearTimeout(timer);
-    }, []);
-
+    // Función para manejar el cambio de slide
     const viewableItemsChanged = useRef(({ viewableItems }) => {
         if (viewableItems && viewableItems.length > 0) {
-            const index = viewableItems[0]?.index ?? 0;
+            const index = viewableItems[0].index;
             setCurrentIndex(index);
-            Haptics.selectionAsync();
+            // Feedback táctil suave al cambiar de slide (Experiencia Premium)
+            Haptics.selectionAsync(); 
         }
     }).current;
 
     const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-    const handleGetStarted = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setShowHero(false);
-    };
-
+    // Acción del botón principal
     const handleNext = () => {
-        if (!slidesRef.current) return;
-        
         if (currentIndex < ONBOARDING_DATA.length - 1) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            slidesRef.current.scrollToIndex({ index: currentIndex + 1, animated: true });
+            slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
         } else {
+            // Navegar a registro con feedback de éxito
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             navigation.navigate('Register');
         }
     };
 
     const handleSkip = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        navigation.navigate('Register');
-    };
-
-    const handleLogin = () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         navigation.navigate('Login');
     };
-
-    // Gradiente de fondo memoizado para rendimiento
-    const backgroundGradient = useMemo(() => (
-        <LinearGradient
-            colors={['#0A0A0A', '#1A1A1A']}
-            style={StyleSheet.absoluteFillObject}
-        />
-    ), []);
-
-    if (showHero) {
-        return <HeroSection onGetStarted={handleGetStarted} onLogin={handleLogin} />;
-    }
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-            {backgroundGradient}
+            
+            {/* Fondo Sutil Global */}
+            <LinearGradient
+                colors={['#1a1a1a', '#000000']}
+                style={StyleSheet.absoluteFillObject}
+            />
 
-            {/* Header con skip button (aparece después de 3s) */}
-            {skipVisible && (
-                <SafeAreaView style={styles.headerContainer}>
-                    <View style={styles.header}>
-                        <TouchableOpacity 
-                            onPress={handleSkip} 
-                            style={styles.skipButton}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                            <Text style={styles.skipText}>Saltar</Text>
-                            <Feather name="arrow-right" size={14} color={COLORS.textDim} />
-                        </TouchableOpacity>
-                    </View>
-                </SafeAreaView>
-            )}
+            {/* Header: Botón Omitir (Skip) */}
+            <SafeAreaView>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
+                        <Text style={styles.skipText}>Omitir</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
 
-            {/* Carrusel de beneficios */}
+            {/* Carrusel */}
             <FlatList
                 data={ONBOARDING_DATA}
-                renderItem={({ item, index }) => (
-                    <OnboardingItem item={item} scrollX={scrollX} index={index} />
-                )}
+                renderItem={({ item, index }) => <OnboardingItem item={item} scrollX={scrollX} index={index} />}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 pagingEnabled
@@ -458,511 +200,167 @@ export default function LandingPage() {
                 onViewableItemsChanged={viewableItemsChanged}
                 viewabilityConfig={viewConfig}
                 ref={slidesRef}
-                scrollEventThrottle={16}
-                decelerationRate="fast"
-                snapToInterval={width}
-                snapToAlignment="center"
+                scrollEventThrottle={32}
             />
 
-            {/* Footer con paginador y acciones */}
-            <View style={styles.footerContainer}>
-                <Paginator data={ONBOARDING_DATA} scrollX={scrollX} currentIndex={currentIndex} />
-                
-                {/* Testimonial (solo en última pantalla) */}
-                {currentIndex === ONBOARDING_DATA.length - 1 && <TestimonialFooter />}
+            {/* Footer: Paginador y Botones */}
+            <View style={styles.footer}>
+                <Paginator data={ONBOARDING_DATA} scrollX={scrollX} />
 
-                {/* Botones de acción */}
-                <View style={styles.footerActions}>
+                <View style={styles.footerButtonsContainer}>
+                    {/* Botón Principal Dinámico */}
                     <TouchableOpacity 
-                        style={styles.mainActionButton} 
+                        style={styles.mainButton} 
                         onPress={handleNext}
-                        activeOpacity={0.85}
-                        accessible={true}
-                        accessibilityLabel={
-                            currentIndex === ONBOARDING_DATA.length - 1 
-                                ? "Crear cuenta gratuita" 
-                                : "Ver siguiente beneficio"
-                        }
-                        accessibilityRole="button"
+                        activeOpacity={0.8}
                     >
                         <LinearGradient
                             colors={[COLORS.primary, COLORS.secondary]}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
-                            style={styles.mainActionGradient}
+                            style={styles.gradientButton}
                         >
-                            <Text style={styles.mainActionText}>
-                                {currentIndex === ONBOARDING_DATA.length - 1 
-                                    ? 'Crear Cuenta Gratis' 
-                                    : 'Siguiente'}
+                            <Text style={styles.mainButtonText}>
+                                {currentIndex === ONBOARDING_DATA.length - 1 ? 'Comenzar Ahora' : 'Siguiente'}
                             </Text>
                             <Feather 
-                                name={currentIndex === ONBOARDING_DATA.length - 1 ? "check" : "arrow-right"} 
+                                name={currentIndex === ONBOARDING_DATA.length - 1 ? "check-circle" : "arrow-right"} 
                                 size={20} 
-                                color="#0A0A0A" 
+                                color="#121212" 
                             />
                         </LinearGradient>
                     </TouchableOpacity>
 
-                    {/* Link a login */}
-                    <TouchableOpacity 
-                        style={styles.loginLink}
-                        onPress={handleLogin}
-                        hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
-                    >
-                        <Text style={styles.loginLinkText}>¿Ya tienes cuenta? </Text>
-                        <Text style={styles.loginLinkBold}>Ingresa aquí</Text>
-                    </TouchableOpacity>
-
-                    {/* Trust badges */}
-                    <View style={styles.trustBadges}>
-                        <View style={styles.trustBadge}>
-                            <Feather name="shield" size={12} color={COLORS.success} />
-                            <Text style={styles.trustBadgeText}>Datos seguros</Text>
-                        </View>
-                        <View style={styles.trustBadge}>
-                            <Feather name="lock" size={12} color={COLORS.success} />
-                            <Text style={styles.trustBadgeText}>Cifrado 256-bit</Text>
-                        </View>
-                        <View style={styles.trustBadge}>
-                            <Feather name="clock" size={12} color={COLORS.success} />
-                            <Text style={styles.trustBadgeText}>Cancela cuando quieras</Text>
-                        </View>
-                    </View>
+                    {/* Botón secundario para Login (Solo visible al final o siempre visible pequeño) */}
+                    {currentIndex === ONBOARDING_DATA.length - 1 && (
+                        <TouchableOpacity 
+                            style={styles.secondaryButton}
+                            onPress={() => navigation.navigate('Login')}
+                        >
+                            <Text style={styles.secondaryButtonText}>¿Ya tienes cuenta? Ingresa aquí</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         </View>
     );
 }
 
-// --- ESTILOS COMPLETOS ---
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
     },
-    
-    // --- HERO SECTION STYLES ---
-    heroContainer: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    decorativeCircle1: {
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 300,
-        height: 300,
-        borderRadius: 150,
-        backgroundColor: COLORS.primary,
-        opacity: 0.03,
-    },
-    decorativeCircle2: {
-        position: 'absolute',
-        bottom: -150,
-        left: -150,
-        width: 400,
-        height: 400,
-        borderRadius: 200,
-        backgroundColor: COLORS.accent,
-        opacity: 0.03,
-    },
-    heroContent: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingHorizontal: SPACING.lg,
-    },
-    heroTop: {
-        alignItems: 'center',
-    },
-    brandBadge: {
-        marginBottom: SPACING.xl,
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 12,
-    },
-    brandBadgeGradient: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: COLORS.border,
-    },
-    heroTitle: {
-        fontSize: TYPOGRAPHY.hero,
-        fontWeight: '900',
-        color: COLORS.text,
-        textAlign: 'center',
-        marginBottom: SPACING.md,
-        letterSpacing: -0.5,
-        lineHeight: TYPOGRAPHY.hero * 1.2,
-    },
-    heroTitleAccent: {
-        color: COLORS.primary,
-    },
-    heroSubtitle: {
-        fontSize: TYPOGRAPHY.bodyLarge,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        lineHeight: 28,
-        marginBottom: SPACING.xl,
-        paddingHorizontal: SPACING.md,
-    },
-    socialProofContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: COLORS.surface,
-        paddingVertical: SPACING.md,
-        paddingHorizontal: SPACING.lg,
-        borderRadius: 100,
-        marginBottom: SPACING.xl,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-    },
-    socialProofItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    socialProofText: {
-        fontSize: TYPOGRAPHY.small,
-        color: COLORS.textSecondary,
-        fontWeight: '600',
-    },
-    socialProofDivider: {
-        width: 1,
-        height: 16,
-        backgroundColor: COLORS.border,
-        marginHorizontal: SPACING.md,
-    },
-    heroCTAContainer: {
-        width: '100%',
-        alignItems: 'center',
-        gap: SPACING.md,
-    },
-    primaryCTA: {
-        width: '100%',
-        borderRadius: 16,
-        overflow: 'hidden',
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 16,
-        elevation: 12,
-    },
-    primaryCTAGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: SPACING.lg,
-        paddingHorizontal: SPACING.lg,
-    },
-    ctaContent: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: SPACING.sm,
-    },
-    primaryCTAText: {
-        fontSize: TYPOGRAPHY.bodyLarge,
-        fontWeight: '800',
-        color: '#0A0A0A',
-        letterSpacing: 0.3,
-    },
-    ctaBadge: {
-        backgroundColor: 'rgba(0, 0, 0, 0.15)',
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    ctaBadgeText: {
-        fontSize: TYPOGRAPHY.small,
-        color: '#0A0A0A',
-        fontWeight: '700',
-    },
-    secondaryCTA: {
-        paddingVertical: SPACING.md,
-        flexDirection: 'row',
-    },
-    secondaryCTAText: {
-        fontSize: TYPOGRAPHY.body,
-        color: COLORS.textSecondary,
-    },
-    secondaryCTATextBold: {
-        fontSize: TYPOGRAPHY.body,
-        color: COLORS.primary,
-        fontWeight: '700',
-    },
-    scrollIndicator: {
-        marginTop: SPACING.xxl,
-        alignItems: 'center',
-        gap: SPACING.xs,
-    },
-    scrollIndicatorText: {
-        fontSize: TYPOGRAPHY.caption,
-        color: COLORS.textDim,
-        fontWeight: '500',
-    },
-
-    // --- ONBOARDING STYLES ---
-    headerContainer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 10,
-    },
     header: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
-        paddingHorizontal: SPACING.lg,
-        paddingTop: Platform.OS === 'android' ? SPACING.lg : 0,
+        paddingHorizontal: 20,
+        paddingTop: Platform.OS === 'android' ? 20 : 0,
     },
     skipButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: COLORS.surface,
-        paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.sm,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: COLORS.border,
+        padding: 10,
     },
     skipText: {
         color: COLORS.textDim,
-        fontSize: TYPOGRAPHY.caption,
+        fontSize: 16,
         fontWeight: '600',
     },
-    onboardingItemContainer: {
+    // Estilos del Item
+    itemContainer: {
         width: width,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: SPACING.lg,
-        paddingVertical: SPACING.xxl,
+        paddingHorizontal: 40,
+        // Ajuste para centrar visualmente teniendo en cuenta header y footer
+        paddingBottom: 100, 
     },
-    onboardingCard: {
-        width: '100%',
-        backgroundColor: COLORS.surface,
-        borderRadius: 24,
-        overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.5,
-        shadowRadius: 24,
-        elevation: 16,
+    iconContainer: {
+        marginBottom: 40,
+        shadowColor: COLORS.primary,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 10,
     },
-    colorIndicator: {
-        height: 4,
-        width: '100%',
-    },
-    cardContent: {
-        padding: SPACING.xl,
-        alignItems: 'center',
-    },
-    iconWrapper: {
-        width: 96,
-        height: 96,
-        borderRadius: 48,
+    iconBackground: {
+        width: 160,
+        height: 160,
+        borderRadius: 80,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: SPACING.lg,
-        borderWidth: 2,
-        borderColor: COLORS.border,
-    },
-    metricBadge: {
-        backgroundColor: COLORS.surfaceLight,
-        paddingHorizontal: SPACING.md,
-        paddingVertical: SPACING.sm,
-        borderRadius: 12,
-        marginBottom: SPACING.lg,
         borderWidth: 1,
-        borderColor: COLORS.border,
+        borderColor: 'rgba(253, 184, 19, 0.3)',
     },
-    metricText: {
-        fontSize: TYPOGRAPHY.caption,
+    title: {
+        fontSize: 32,
         fontWeight: '800',
+        color: COLORS.text,
+        textAlign: 'center',
+        marginBottom: 16,
         letterSpacing: 0.5,
     },
-    cardTitle: {
-        fontSize: TYPOGRAPHY.h2,
-        fontWeight: '800',
-        color: COLORS.text,
-        textAlign: 'center',
-        marginBottom: SPACING.md,
-        letterSpacing: -0.3,
-    },
-    cardDescription: {
-        fontSize: TYPOGRAPHY.body,
-        color: COLORS.textSecondary,
-        textAlign: 'center',
-        lineHeight: 24,
-        marginBottom: SPACING.lg,
-    },
-    benefitsContainer: {
-        flexDirection: 'row',
-        gap: SPACING.lg,
-        marginTop: SPACING.md,
-    },
-    benefitItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    benefitText: {
-        fontSize: TYPOGRAPHY.caption,
-        color: COLORS.textSecondary,
-        fontWeight: '600',
-    },
-
-    // --- PAGINATOR ---
-    paginatorContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingVertical: SPACING.lg,
-    },
-    paginatorDot: {
-        height: 6,
-        borderRadius: 3,
-        marginHorizontal: 4,
-    },
-
-    // --- TESTIMONIAL ---
-    testimonialContainer: {
-        paddingHorizontal: SPACING.lg,
-        marginBottom: SPACING.lg,
-    },
-    testimonialCard: {
-        backgroundColor: COLORS.surface,
-        borderRadius: 20,
-        padding: SPACING.lg,
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        position: 'relative',
-    },
-    quoteIcon: {
-        position: 'absolute',
-        top: SPACING.md,
-        right: SPACING.md,
-        opacity: 0.5,
-    },
-    testimonialText: {
-        fontSize: TYPOGRAPHY.body,
-        color: COLORS.text,
-        lineHeight: 24,
-        marginBottom: SPACING.md,
-        fontStyle: 'italic',
-    },
-    testimonialAuthor: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: SPACING.md,
-    },
-    avatarPlaceholder: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: COLORS.primary,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    avatarText: {
-        fontSize: TYPOGRAPHY.caption,
-        fontWeight: '800',
-        color: '#0A0A0A',
-    },
-    authorName: {
-        fontSize: TYPOGRAPHY.caption,
-        fontWeight: '700',
-        color: COLORS.text,
-        flex: 1,
-    },
-    authorRole: {
-        fontSize: TYPOGRAPHY.small,
+    description: {
+        fontSize: 17,
         color: COLORS.textDim,
+        textAlign: 'center',
+        lineHeight: 26,
+        paddingHorizontal: 10,
     },
-    verifiedBadge: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        backgroundColor: COLORS.success,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-
-    // --- FOOTER ACTIONS ---
-    footerContainer: {
+    // Footer styles
+    footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        paddingBottom: Platform.OS === 'ios' ? SPACING.xl : SPACING.lg,
-        backgroundColor: 'transparent',
+        height: height * 0.25, // Ocupa el 25% inferior
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingBottom: 40,
     },
-    footerActions: {
-        paddingHorizontal: SPACING.lg,
-        gap: SPACING.md,
+    paginatorContainer: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginBottom: 20,
     },
-    mainActionButton: {
+    dot: {
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: COLORS.primary,
+        marginHorizontal: 6,
+    },
+    footerButtonsContainer: {
+        width: '100%',
+        alignItems: 'center',
+    },
+    mainButton: {
         width: '100%',
         borderRadius: 16,
-        overflow: 'hidden',
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.4,
-        shadowRadius: 16,
-        elevation: 12,
+        shadowColor: COLORS.secondary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 8,
+        overflow: 'hidden', // Necesario para el gradiente dentro de botones redondeados
     },
-    mainActionGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: SPACING.lg,
-        paddingHorizontal: SPACING.lg,
-    },
-    mainActionText: {
-        fontSize: TYPOGRAPHY.bodyLarge,
-        fontWeight: '800',
-        color: '#0A0A0A',
-        letterSpacing: 0.3,
-    },
-    loginLink: {
+    gradientButton: {
+        paddingVertical: 18,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingVertical: SPACING.sm,
+        gap: 10,
     },
-    loginLinkText: {
-        fontSize: TYPOGRAPHY.caption,
-        color: COLORS.textSecondary,
+    mainButtonText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#121212',
     },
-    loginLinkBold: {
-        fontSize: TYPOGRAPHY.caption,
+    secondaryButton: {
+        marginTop: 20,
+        padding: 10,
+    },
+    secondaryButtonText: {
         color: COLORS.primary,
-        fontWeight: '700',
-    },
-    trustBadges: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        flexWrap: 'wrap',
-        gap: SPACING.md,
-        marginTop: SPACING.sm,
-    },
-    trustBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    trustBadgeText: {
-        fontSize: TYPOGRAPHY.small,
-        color: COLORS.textDim,
-        fontWeight: '500',
+        fontSize: 14,
+        fontWeight: '600',
     },
 });
