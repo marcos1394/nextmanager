@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
     View,
     Text,
@@ -9,72 +9,70 @@ import {
     StatusBar,
     FlatList,
     Platform,
-    SafeAreaView
+    ActivityIndicator
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics'; // Feedback táctil profesional
+import * as Haptics from 'expo-haptics';
+import { useAuth } from '../context/AuthContext'; // Importación del contexto
 
 const { width, height } = Dimensions.get('window');
 
-// --- CONSTANTES DE DISEÑO ---
+// --- CONSTANTES DE DISEÑO Y DATOS ---
 const COLORS = {
-    primary: '#FDB813',     // Amarillo Gold
-    secondary: '#FFAA00',   // Naranja Gold
-    background: '#121212',  // Negro profundo
-    surface: '#1E1E1E',     // Gris oscuro para tarjetas
+    primary: '#FDB813',      // Amarillo Gold
+    secondary: '#FFAA00',    // Naranja Gold
+    background: '#121212',   // Negro profundo
+    surface: '#1E1E1E',
     text: '#FFFFFF',
-    textDim: '#A9A9A9',
+    textDim: '#E0E0E0',      // Gris claro para buena lectura
 };
 
 const ONBOARDING_DATA = [
     {
         key: '1',
-        icon: 'chart-timeline-variant',
-        title: 'Control Total',
-        description: 'Monitorea tus ventas y métricas en tiempo real. Tu restaurante, en tu bolsillo.',
+        icon: 'finance',
+        title: 'Tu Restaurante,\nBajo Control',
+        description: 'Visualiza tus ventas en tiempo real y detecta fugas de dinero al instante. Gestión total en tu bolsillo.',
     },
     {
         key: '2',
-        icon: 'brain', // Icono más moderno para "Inteligencia"
-        title: 'Decisiones Inteligentes',
-        description: 'Transforma datos en estrategias. Optimiza tu menú basándote en tendencias reales.',
+        icon: 'lightning-bolt',
+        title: 'Decisiones que\nGeneran Dinero',
+        description: 'No adivines. Usa datos reales para optimizar tu menú y aumentar tus márgenes de ganancia hoy mismo.',
     },
     {
         key: '3',
-        icon: 'radar', // Icono para "Detección/Alertas"
-        title: 'Siempre Alerta',
-        description: 'Recibe notificaciones instantáneas sobre inventario crítico y anomalías en ventas.',
+        icon: 'bell-ring',
+        title: 'Nunca te quedes\nsin inventario',
+        description: 'Recibe alertas automáticas antes de que se agoten tus insumos críticos. Opera sin interrupciones.',
     },
 ];
 
 // --- COMPONENTE: ITEM DEL CARRUSEL (CON PARALLAX) ---
 const OnboardingItem = ({ item, scrollX, index }) => {
-    // Interpolaciones para efectos Parallax
+    // Matemáticas para la interpolación Parallax basada en la posición del scroll
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
     
-    // El icono se mueve un poco más lento que el texto (Parallax)
-    const iconTranslateY = scrollX.interpolate({
-        inputRange,
-        outputRange: [0, 0, 0], // Mantener centrado, pero podríamos moverlo
-    });
-
+    // El icono escala suavemente
     const iconScale = scrollX.interpolate({
         inputRange,
         outputRange: [0.5, 1, 0.5],
         extrapolate: 'clamp',
     });
     
-    const textOpacity = scrollX.interpolate({
-        inputRange,
-        outputRange: [0, 1, 0],
-        extrapolate: 'clamp',
-    });
-
+    // El texto se mueve a diferente velocidad para efecto de profundidad
     const textTranslate = scrollX.interpolate({
         inputRange,
         outputRange: [50, 0, -50],
+        extrapolate: 'clamp',
+    });
+    
+    // Opacidad para transiciones suaves
+    const opacity = scrollX.interpolate({
+        inputRange,
+        outputRange: [0, 1, 0],
         extrapolate: 'clamp',
     });
 
@@ -82,18 +80,17 @@ const OnboardingItem = ({ item, scrollX, index }) => {
         <View style={styles.itemContainer}>
             <Animated.View style={[
                 styles.iconContainer, 
-                { transform: [{ scale: iconScale }, { translateY: iconTranslateY }] }
+                { transform: [{ scale: iconScale }] }
             ]}>
-                {/* Círculo decorativo con gradiente sutil */}
                 <LinearGradient
-                    colors={['rgba(253, 184, 19, 0.2)', 'rgba(253, 184, 19, 0.05)']}
+                    colors={['rgba(253, 184, 19, 0.25)', 'rgba(253, 184, 19, 0.02)']}
                     style={styles.iconBackground}
                 >
                     <MaterialCommunityIcons name={item.icon} size={80} color={COLORS.primary} />
                 </LinearGradient>
             </Animated.View>
 
-            <Animated.View style={{ opacity: textOpacity, transform: [{ translateX: textTranslate }] }}>
+            <Animated.View style={{ opacity, transform: [{ translateX: textTranslate }] }}>
                 <Text style={styles.title}>{item.title}</Text>
                 <Text style={styles.description}>{item.description}</Text>
             </Animated.View>
@@ -101,16 +98,17 @@ const OnboardingItem = ({ item, scrollX, index }) => {
     );
 };
 
-// --- COMPONENTE: PAGINADOR ---
+// --- COMPONENTE: PAGINADOR ANIMADO ---
 const Paginator = ({ data, scrollX }) => {
     return (
         <View style={styles.paginatorContainer}>
             {data.map((_, i) => {
                 const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
                 
+                // El punto activo se estira
                 const dotWidth = scrollX.interpolate({
                     inputRange,
-                    outputRange: [10, 25, 10], // El punto activo se estira
+                    outputRange: [8, 24, 8],
                     extrapolate: 'clamp',
                 });
 
@@ -131,60 +129,87 @@ const Paginator = ({ data, scrollX }) => {
     );
 };
 
+// --- COMPONENTE: FONDO MEMOIZADO (OPTIMIZACIÓN) ---
+const Background = React.memo(() => (
+    <LinearGradient
+        colors={['#1a1a1a', '#050505']}
+        style={StyleSheet.absoluteFillObject}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+    />
+));
+
 // --- COMPONENTE PRINCIPAL ---
 export default function LandingPage() {
     const navigation = useNavigation();
+    const { isAuthenticated, isLoading } = useAuth(); // Hook de autenticación
+
     const scrollX = useRef(new Animated.Value(0)).current;
     const slidesRef = useRef(null);
     const [currentIndex, setCurrentIndex] = useState(0);
 
-    // Función para manejar el cambio de slide
+    // --- 1. LÓGICA DE REDIRECCIÓN AUTOMÁTICA ---
+    useEffect(() => {
+        // Solo verificamos cuando termina de cargar (isLoading es false)
+        if (!isLoading) {
+            if (isAuthenticated) {
+                console.log('[LandingPage] Sesión activa detectada. Redirigiendo al Dashboard.');
+                navigation.replace('Monitor');
+            } else {
+                console.log('[LandingPage] No hay sesión activa. Mostrando Onboarding.');
+            }
+        }
+    }, [isLoading, isAuthenticated, navigation]);
+
+    // --- 2. RENDERIZADO DE CARGA (Evita "Flash" de contenido) ---
+    if (isLoading) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+                <ActivityIndicator size="large" color={COLORS.primary} />
+            </View>
+        );
+    }
+
+    // --- FUNCIONES DE INTERACCIÓN ---
+
     const viewableItemsChanged = useRef(({ viewableItems }) => {
         if (viewableItems && viewableItems.length > 0) {
             const index = viewableItems[0].index;
             setCurrentIndex(index);
-            // Feedback táctil suave al cambiar de slide (Experiencia Premium)
-            Haptics.selectionAsync(); 
+            // Feedback táctil suave al cambiar de slide
+            if (Platform.OS === 'ios') Haptics.selectionAsync();
         }
     }).current;
 
     const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
-    // Acción del botón principal
     const handleNext = () => {
+        if (!slidesRef.current) return;
+
         if (currentIndex < ONBOARDING_DATA.length - 1) {
+            // Avanzar al siguiente slide
             slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
         } else {
-            // Navegar a registro con feedback de éxito
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            // Finalizar onboarding e ir a Registro
+            console.log('[LandingPage] Usuario completó el onboarding. Navegando a Registro.');
+            if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             navigation.navigate('Register');
         }
     };
 
-    const handleSkip = () => {
+    const handleLogin = () => {
+        console.log('[LandingPage] Usuario seleccionó Iniciar Sesión.');
         navigation.navigate('Login');
     };
 
+    // --- RENDERIZADO PRINCIPAL ---
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-            
-            {/* Fondo Sutil Global */}
-            <LinearGradient
-                colors={['#1a1a1a', '#000000']}
-                style={StyleSheet.absoluteFillObject}
-            />
+            <Background />
 
-            {/* Header: Botón Omitir (Skip) */}
-            <SafeAreaView>
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={handleSkip} style={styles.skipButton}>
-                        <Text style={styles.skipText}>Omitir</Text>
-                    </TouchableOpacity>
-                </View>
-            </SafeAreaView>
-
-            {/* Carrusel */}
+            {/* Carrusel de Contenido */}
             <FlatList
                 data={ONBOARDING_DATA}
                 renderItem={({ item, index }) => <OnboardingItem item={item} scrollX={scrollX} index={index} />}
@@ -203,16 +228,17 @@ export default function LandingPage() {
                 scrollEventThrottle={32}
             />
 
-            {/* Footer: Paginador y Botones */}
+            {/* Footer Fijo con Controles */}
             <View style={styles.footer}>
+                {/* Paginador (Puntitos) */}
                 <Paginator data={ONBOARDING_DATA} scrollX={scrollX} />
 
                 <View style={styles.footerButtonsContainer}>
-                    {/* Botón Principal Dinámico */}
+                    {/* Botón Principal (Siguiente / Crear Cuenta) */}
                     <TouchableOpacity 
                         style={styles.mainButton} 
                         onPress={handleNext}
-                        activeOpacity={0.8}
+                        activeOpacity={0.9}
                     >
                         <LinearGradient
                             colors={[COLORS.primary, COLORS.secondary]}
@@ -221,101 +247,87 @@ export default function LandingPage() {
                             style={styles.gradientButton}
                         >
                             <Text style={styles.mainButtonText}>
-                                {currentIndex === ONBOARDING_DATA.length - 1 ? 'Comenzar Ahora' : 'Siguiente'}
+                                {currentIndex === ONBOARDING_DATA.length - 1 ? 'Crear Cuenta Gratis' : 'Siguiente'}
                             </Text>
                             <Feather 
-                                name={currentIndex === ONBOARDING_DATA.length - 1 ? "check-circle" : "arrow-right"} 
-                                size={20} 
+                                name={currentIndex === ONBOARDING_DATA.length - 1 ? "arrow-up-right" : "arrow-right"} 
+                                size={22} 
                                 color="#121212" 
                             />
                         </LinearGradient>
                     </TouchableOpacity>
 
-                    {/* Botón secundario para Login (Solo visible al final o siempre visible pequeño) */}
-                    {currentIndex === ONBOARDING_DATA.length - 1 && (
-                        <TouchableOpacity 
-                            style={styles.secondaryButton}
-                            onPress={() => navigation.navigate('Login')}
-                        >
-                            <Text style={styles.secondaryButtonText}>¿Ya tienes cuenta? Ingresa aquí</Text>
-                        </TouchableOpacity>
-                    )}
+                    {/* Enlace discreto para Login */}
+                    <TouchableOpacity 
+                        style={styles.loginLinkButton}
+                        onPress={handleLogin}
+                        hitSlop={{top: 15, bottom: 15, left: 15, right: 15}}
+                    >
+                        <Text style={styles.loginLinkText}>
+                            ¿Ya tienes cuenta? <Text style={styles.loginLinkHighlight}>Inicia Sesión</Text>
+                        </Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         </View>
     );
 }
 
+// --- ESTILOS ---
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.background,
     },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? 20 : 0,
-    },
-    skipButton: {
-        padding: 10,
-    },
-    skipText: {
-        color: COLORS.textDim,
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    // Estilos del Item
     itemContainer: {
         width: width,
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 40,
-        // Ajuste para centrar visualmente teniendo en cuenta header y footer
-        paddingBottom: 100, 
+        paddingHorizontal: 32,
+        paddingBottom: height * 0.25, // Empuja el contenido hacia arriba para dejar espacio al footer
     },
     iconContainer: {
         marginBottom: 40,
         shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 20,
-        elevation: 10,
+        shadowOffset: { width: 0, height: 15 },
+        shadowOpacity: 0.25,
+        shadowRadius: 30,
+        elevation: 15,
     },
     iconBackground: {
-        width: 160,
-        height: 160,
-        borderRadius: 80,
+        width: 180,
+        height: 180,
+        borderRadius: 90,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(253, 184, 19, 0.3)',
+        borderWidth: 1.5,
+        borderColor: 'rgba(253, 184, 19, 0.4)',
     },
     title: {
-        fontSize: 32,
+        fontSize: 34,
         fontWeight: '800',
         color: COLORS.text,
         textAlign: 'center',
         marginBottom: 16,
         letterSpacing: 0.5,
+        lineHeight: 40,
     },
     description: {
-        fontSize: 17,
+        fontSize: 18,
         color: COLORS.textDim,
         textAlign: 'center',
-        lineHeight: 26,
+        lineHeight: 28,
         paddingHorizontal: 10,
     },
-    // Footer styles
     footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: height * 0.25, // Ocupa el 25% inferior
+        height: height * 0.28, // Altura reservada para controles
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingBottom: 40,
+        paddingHorizontal: 24,
+        paddingBottom: Platform.OS === 'ios' ? 40 : 24,
     },
     paginatorContainer: {
         flexDirection: 'row',
@@ -326,41 +338,46 @@ const styles = StyleSheet.create({
         height: 8,
         borderRadius: 4,
         backgroundColor: COLORS.primary,
-        marginHorizontal: 6,
+        marginHorizontal: 5,
     },
     footerButtonsContainer: {
         width: '100%',
         alignItems: 'center',
+        gap: 16,
     },
     mainButton: {
         width: '100%',
-        borderRadius: 16,
+        borderRadius: 18,
         shadowColor: COLORS.secondary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 8,
-        overflow: 'hidden', // Necesario para el gradiente dentro de botones redondeados
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        elevation: 10,
+        overflow: 'hidden',
     },
     gradientButton: {
         paddingVertical: 18,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 10,
+        gap: 12,
     },
     mainButtonText: {
         fontSize: 18,
         fontWeight: 'bold',
         color: '#121212',
+        letterSpacing: 0.5,
     },
-    secondaryButton: {
-        marginTop: 20,
+    loginLinkButton: {
         padding: 10,
     },
-    secondaryButtonText: {
-        color: COLORS.primary,
-        fontSize: 14,
-        fontWeight: '600',
+    loginLinkText: {
+        color: COLORS.textDim,
+        fontSize: 15,
+        fontWeight: '500',
     },
+    loginLinkHighlight: {
+        color: COLORS.primary,
+        fontWeight: '700',
+    }
 });
