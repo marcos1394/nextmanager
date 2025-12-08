@@ -12,6 +12,7 @@ import {
     Dimensions,
     TouchableOpacity,
     ScrollView,
+    ActivityIndicator,
     RefreshControl
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
