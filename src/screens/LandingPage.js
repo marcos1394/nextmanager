@@ -50,19 +50,22 @@ const ONBOARDING_DATA = [
     },
 ];
 
-// --- COMPONENTES AUXILIARES (Sin cambios) ---
-const OnboardingItem = ({ item, scrollX, index }) => {
+// --- COMPONENTES AUXILIARES ---
+const OnboardingItem = React.memo(({ item, scrollX, index }) => {
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+    
     const iconScale = scrollX.interpolate({
         inputRange,
         outputRange: [0.5, 1, 0.5],
         extrapolate: 'clamp',
     });
+    
     const textTranslate = scrollX.interpolate({
         inputRange,
         outputRange: [50, 0, -50],
         extrapolate: 'clamp',
     });
+    
     const opacity = scrollX.interpolate({
         inputRange,
         outputRange: [0, 1, 0],
@@ -89,24 +92,32 @@ const OnboardingItem = ({ item, scrollX, index }) => {
             </Animated.View>
         </View>
     );
-};
+});
 
 const Paginator = ({ data, scrollX }) => {
     return (
         <View style={styles.paginatorContainer}>
             {data.map((_, i) => {
                 const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
+                
                 const dotWidth = scrollX.interpolate({
                     inputRange,
                     outputRange: [8, 24, 8],
                     extrapolate: 'clamp',
                 });
+
                 const opacity = scrollX.interpolate({
                     inputRange,
                     outputRange: [0.3, 1, 0.3],
                     extrapolate: 'clamp',
                 });
-                return <Animated.View key={i.toString()} style={[styles.dot, { width: dotWidth, opacity }]} />;
+
+                return (
+                    <Animated.View 
+                        key={i.toString()} 
+                        style={[styles.dot, { width: dotWidth, opacity }]} 
+                    />
+                );
             })}
         </View>
     );
@@ -121,9 +132,8 @@ const Background = React.memo(() => (
     />
 ));
 
-// --- COMPONENTE PRINCIPAL (Lógica Corregida) ---
+// --- PANTALLA PRINCIPAL ---
 export default function LandingPage() {
-    // 1. TODOS LOS HOOKS PRIMERO (Sin excepciones)
     const navigation = useNavigation();
     const { isAuthenticated, isLoading } = useAuth();
     
@@ -131,7 +141,6 @@ export default function LandingPage() {
     const slidesRef = useRef(null);
     const [currentIndex, setCurrentIndex] = useState(0);
 
-    // --- CORRECCIÓN: Estos refs estaban DEBAJO del return, causando el error ---
     const viewableItemsChanged = useRef(({ viewableItems }) => {
         if (viewableItems && viewableItems.length > 0) {
             const index = viewableItems[0].index;
@@ -141,23 +150,18 @@ export default function LandingPage() {
     }).current;
 
     const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
-    // --- FIN DE CORRECCIÓN ---
 
-    // 2. EFECTOS
+    // --- EFECTO DE REDIRECCIÓN ---
     useEffect(() => {
-        if (!isLoading) {
-            if (isAuthenticated) {
-                console.log('[LandingPage] Sesión activa detectada. Redirigiendo al Dashboard.');
-                navigation.replace('Monitor');
-            } else {
-                console.log('[LandingPage] No hay sesión activa. Mostrando Onboarding.');
-            }
+        if (!isLoading && isAuthenticated) {
+            // console.log('[System] Sesión válida. Redirigiendo...'); // Solo para dev
+            navigation.replace('Monitor');
         }
     }, [isLoading, isAuthenticated, navigation]);
 
-    // 3. FUNCIONES
     const handleNext = () => {
         if (!slidesRef.current) return;
+
         if (currentIndex < ONBOARDING_DATA.length - 1) {
             slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
         } else {
@@ -170,11 +174,14 @@ export default function LandingPage() {
         navigation.navigate('Login');
     };
 
-    // 4. RENDERIZADO CONDICIONAL (Al final de todo)
-    if (isLoading) {
+    // --- RENDERIZADO CONDICIONAL CRÍTICO ---
+    // Si está cargando O si está autenticado (esperando redirección), mostramos spinner.
+    // Esto evita que se renderice el Carrusel innecesariamente.
+    if (isLoading || isAuthenticated) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
                 <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+                <Background />
                 <ActivityIndicator size="large" color={COLORS.primary} />
             </View>
         );
@@ -205,6 +212,7 @@ export default function LandingPage() {
 
             <View style={styles.footer}>
                 <Paginator data={ONBOARDING_DATA} scrollX={scrollX} />
+
                 <View style={styles.footerButtonsContainer}>
                     <TouchableOpacity 
                         style={styles.mainButton} 
@@ -243,7 +251,7 @@ export default function LandingPage() {
     );
 }
 
-// --- ESTILOS (Sin cambios) ---
+// --- ESTILOS ---
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: COLORS.background },
     itemContainer: { width: width, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, paddingBottom: height * 0.25 },

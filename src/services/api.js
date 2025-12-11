@@ -13,17 +13,15 @@ const api = axios.create({
 });
 
 // ------------------------------------------------------------------
-// --- LOGGING DE PETICIONES (INTERCEPTORES) ---
+// --- LOGGING DE SISTEMA (INTERCEPTORES) ---
 // ------------------------------------------------------------------
 
 // 2. Interceptor de Petición (Request)
 api.interceptors.request.use(
     async (config) => {
-        console.log(`[API Request] 🚀 --> ${config.method.toUpperCase()} ${config.url}`);
-        if (config.data) {
-            console.log('[API Request] Payload:', JSON.stringify(config.data, null, 2));
-        }
-
+        // Log limpio para el desarrollador (Sistema)
+        // console.log(`[API Request] 🚀 ${config.method.toUpperCase()} ${config.url}`);
+        
         const token = await SecureStore.getItemAsync('accessToken');
         if (token) {
             config.headers.Authorization = token;
@@ -31,7 +29,7 @@ api.interceptors.request.use(
         return config;
     },
     (error) => {
-        console.error('[API Request Error] Error al configurar la petición:', error.message);
+        console.error('[System] Error configurando petición:', error.message);
         return Promise.reject(error);
     }
 );
@@ -39,43 +37,70 @@ api.interceptors.request.use(
 // 3. Interceptor de Respuesta (Response)
 api.interceptors.response.use(
     (response) => {
-        console.log(`[API Response] ✅ <-- ${response.status} ${response.config.url}`);
+        // Log de éxito (opcional, descomentar para depuración profunda)
+        // console.log(`[API Response] ✅ ${response.status} ${response.config.url}`);
         return response;
     },
     async (error) => {
         const originalRequest = error.config;
 
-        console.error(`[API Error] ❌ !!!! ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
-        
-        if (error.response) {
-            console.error('[API Error] Status:', error.response.status);
-            console.error('[API Error] Data:', JSON.stringify(error.response.data, null, 2));
-        } else if (error.request) {
-            console.error('[API Error] No Response: El servidor no respondió o está caído.', error.message);
-        } else {
-            console.error('[API Error] Request Setup Error:', error.message);
+        // --- LÓGICA DE SILENCIO INTELIGENTE ---
+        // Si es un error 401 y aún no hemos reintentado, NO mostramos el error rojo todavía.
+        // Asumimos que es un token expirado y el sistema intentará arreglarlo silenciosamente.
+        const isRetryable = error.response?.status === 401 && !originalRequest._retry;
+
+        if (!isRetryable) {
+            // Solo mostramos errores reales o fallos definitivos
+            console.error(`[API Error] ❌ ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
+            if (error.response) {
+                console.error(`   Status: ${error.response.status} - ${error.response.data?.message || 'Sin mensaje'}`);
+            } else if (error.request) {
+                console.error('   No Response: El servidor no respondió.');
+            } else {
+                console.error('   Error:', error.message);
+            }
         }
 
-        // Lógica de Refresh Token
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // --- LÓGICA DE REFRESH TOKEN ---
+        if (isRetryable) {
             originalRequest._retry = true;
             try {
-                const refreshToken = await SecureStore.getItemAsync('refreshToken');
-                if (!refreshToken) return Promise.reject(error);
+                // Log informativo de sistema (no es un error)
+                console.log('[System] 🔄 Token expirado. Renovando sesión...');
 
+                const refreshToken = await SecureStore.getItemAsync('refreshToken');
+                if (!refreshToken) {
+                    console.log('[System] ⚠️ No hay refresh token. Cerrando sesión.');
+                    return Promise.reject(error);
+                }
+
+                // Llamada directa a axios para evitar bucles con el interceptor
                 const rs = await axios.post(`${API_URL}/auth/refresh-token`, { refreshToken });
                 const { accessToken } = rs.data;
 
+                // Guardamos el nuevo token
                 await SecureStore.setItemAsync('accessToken', accessToken);
-                api.defaults.headers.common['Authorization'] = accessToken;
                 
+                // Actualizamos las cabeceras
+                api.defaults.headers.common['Authorization'] = accessToken;
+                originalRequest.headers['Authorization'] = accessToken;
+
+                console.log('[System] ✅ Sesión renovada. Reintentando petición original.');
+                
+                // Reintentamos la petición original
                 return api(originalRequest);
+
             } catch (refreshError) {
+                // Si el refresh falla, entonces sí es un error fatal.
+                console.error('[System] ❌ Falló la renovación de token. Forzando Logout.');
+                
                 await SecureStore.deleteItemAsync('accessToken');
                 await SecureStore.deleteItemAsync('refreshToken');
+                
                 return Promise.reject(refreshError);
             }
         }
+
         return Promise.reject(error);
     }
 );
@@ -85,6 +110,7 @@ api.interceptors.response.use(
 // ------------------------------------------------------------------
 
 // --- Auth Service ---
+
 export const registerUser = async (registrationData) => {
     return api.post('/auth/register', registrationData);
 };
@@ -93,23 +119,28 @@ export const loginUser = async (email, password) => {
     return api.post('/auth/login', { email, password });
 };
 
-// ⭐ AGREGADO: Función logoutUser
 export const logoutUser = async () => {
     try {
-        const response = await api.post('/auth/logout');
-        // Limpiar tokens del almacenamiento local
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        return response.data;
+        await api.post('/auth/logout');
     } catch (error) {
-        // Incluso si el logout falla en el backend, limpiamos los tokens localmente
+        // Ignoramos error de red en logout, priorizamos limpieza local
+        console.warn('[System] El backend no respondió al logout, limpiando localmente.');
+    } finally {
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
-        throw error.response?.data || new Error('Error al cerrar sesión.');
+    }
+    return { success: true };
+};
+
+export const getAccountDetails = async () => {
+    try {
+        const response = await api.get('/auth/account-details');
+        return response.data; 
+    } catch (error) {
+        throw error.response?.data || new Error('Error al obtener los detalles de la cuenta.');
     }
 };
 
-// ⭐ AGREGADO: Función para recuperar contraseña
 export const forgotPassword = async (email) => {
     try {
         const response = await api.post('/auth/forgot-password', { email });
@@ -119,7 +150,6 @@ export const forgotPassword = async (email) => {
     }
 };
 
-// ⭐ AGREGADO: Función para resetear contraseña
 export const resetPassword = async (token, newPassword) => {
     try {
         const response = await api.post('/auth/reset-password', { token, newPassword });
@@ -130,6 +160,7 @@ export const resetPassword = async (token, newPassword) => {
 };
 
 // --- Payment Service ---
+
 export const getAvailablePlans = async () => {
     try {
         const response = await api.get('/payments/plans');
@@ -162,6 +193,7 @@ export const getPurchaseStatus = async (purchaseId) => {
 };
 
 // --- Notification Service ---
+
 export const sendContactForm = async (contactData) => {
     try {
         const response = await api.post('/notifications/contact-form', contactData);
@@ -172,6 +204,7 @@ export const sendContactForm = async (contactData) => {
 };
 
 // --- Content Service ---
+
 export const getHelpCenterContent = async () => {
     try {
         const response = await api.get('/content/help-center/content');
@@ -201,20 +234,5 @@ export const createHelpArticle = async (articleData) => {
     }
 };
 
-/**
- * Obtiene los detalles completos de la cuenta del usuario (Perfil, Plan, Restaurantes).
- * Ruta protegida: El interceptor adjuntará el token automáticamente.
- */
-export const getAccountDetails = async () => {
-    try {
-        const response = await api.get('/auth/account-details');
-        return response.data; // Devuelve { success: true, data: { profile: ..., plan: ... } }
-    } catch (error) {
-        throw error.response?.data || new Error('Error al obtener los detalles de la cuenta.');
-    }
-};
-
-// --- POS Service & Restaurant Service ---
-// (Aquí puedes añadir getPosLogbook, getFullRestaurantConfig, etc.)
-
+// Exportamos la instancia por defecto para usos directos (como en MonitorScreen)
 export default api;
