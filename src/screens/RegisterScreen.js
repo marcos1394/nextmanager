@@ -6,17 +6,16 @@ import {
     StyleSheet,
     ActivityIndicator,
     StatusBar,
-    Animated,
+    Animated, // Usaremos Animated estándar, es más estable
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     Dimensions,
     Alert,
-    TextInput,
-    LayoutAnimation,
-    UIManager
+    TextInput
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <-- CORRECCIÓN IMPORTANTE
+// IMPORTANTE: Usamos la librería correcta para evitar warnings
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -24,13 +23,6 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
-
-// Habilitar animaciones de layout para Android
-if (Platform.OS === 'android') {
-    if (UIManager.setLayoutAnimationEnabledExperimental) {
-        UIManager.setLayoutAnimationEnabledExperimental(true);
-    }
-}
 
 // --- COMPONENTES UI ---
 
@@ -56,8 +48,7 @@ const ModernInput = ({ icon, placeholder, value, onChangeText, secureTextEntry, 
                     autoCapitalize={autoCapitalize}
                     onFocus={() => { setIsFocused(true); if(onFocus) onFocus(); }}
                     onBlur={() => { setIsFocused(false); if(onBlur) onBlur(); }}
-                    // cursorColor solo funciona en Android API 29+, usamos selectionColor para compatibilidad general
-                    selectionColor="#FDB813" 
+                    selectionColor="#FDB813"
                 />
                 {error && <Feather name="alert-circle" size={20} color="#EF4444" />}
                 {!error && value.length > 0 && !secureTextEntry && (
@@ -81,20 +72,28 @@ const PasswordStrength = ({ password }) => {
     const strength = criteria.filter(c => c.valid).length;
     const colors = ['#EF4444', '#F59E0B', '#10B981']; 
     
-    // CORRECCIÓN: Usamos LayoutAnimation en lugar de Animated para el ancho
-    // Esto evita el error "Expected static flag was missing"
+    // CORRECCIÓN: Usamos Animated.Value estándar para evitar el crash de LayoutAnimation
+    const widthAnim = useRef(new Animated.Value(0)).current;
+
     useEffect(() => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        Animated.timing(widthAnim, {
+            toValue: (strength / 3) * 100,
+            duration: 300,
+            useNativeDriver: false, // width no soporta native driver, pero es seguro aquí
+        }).start();
     }, [strength]);
 
     return (
         <View style={styles.passwordStrengthContainer}>
             <View style={styles.strengthBarBg}>
-                <View 
+                <Animated.View 
                     style={[
                         styles.strengthBarFill, 
                         { 
-                            width: `${(strength / 3) * 100}%`, // Ancho simple
+                            width: widthAnim.interpolate({
+                                inputRange: [0, 100],
+                                outputRange: ['0%', '100%']
+                            }),
                             backgroundColor: colors[strength - 1] || '#333'
                         }
                     ]} 
@@ -138,7 +137,7 @@ const RegisterScreen = () => {
     const validate = () => {
         const newErrors = {};
         if (!formData.name.trim()) newErrors.name = "Tu nombre es requerido";
-        // Regex robusto para email
+        
         const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!formData.email.trim()) newErrors.email = "El correo es requerido";
         else if (!emailRegex.test(formData.email)) newErrors.email = "Correo inválido";
@@ -174,12 +173,11 @@ const RegisterScreen = () => {
 
             if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
-            // CORRECCIÓN PANTALLA NEGRA:
-            // Al hacer replace, esta pantalla se desmonta. NO debemos llamar a setIsLoading(false) después.
+            // Navegamos directamente. No desactivamos loading para evitar parpadeos
             navigation.replace('Plans');
 
         } catch (error) {
-            // Solo logueamos en sistema, no mostramos error feo al usuario
+            // Logs limpios para sistema
             console.log('[RegisterSystem] Error:', error.message);
 
             let userMessage = 'Ocurrió un problema inesperado. Por favor intenta de nuevo.';
@@ -190,11 +188,10 @@ const RegisterScreen = () => {
                 userMessage = error.response.data.message;
             }
 
-            Alert.alert('No pudimos crear tu cuenta', userMessage);
+            Alert.alert('Atención', userMessage);
             
             if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             
-            // Solo desactivamos loading si HUBO error (la pantalla sigue viva)
             setIsLoading(false);
         }
     };
@@ -209,7 +206,6 @@ const RegisterScreen = () => {
             >
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                     
-                    {/* Header */}
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                         <Feather name="arrow-left" size={24} color="#FFF" />
                     </TouchableOpacity>
@@ -219,7 +215,6 @@ const RegisterScreen = () => {
                         <Text style={styles.subtitle}>Crea tu cuenta en segundos y digitaliza tu restaurante hoy mismo.</Text>
                     </View>
 
-                    {/* Formulario */}
                     <View style={styles.form}>
                         <ModernInput 
                             icon="user" 
