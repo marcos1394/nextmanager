@@ -7,23 +7,32 @@ import {
     ActivityIndicator,
     StatusBar,
     Animated,
-    SafeAreaView,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
     Dimensions,
     Alert,
-    TextInput
+    TextInput,
+    LayoutAnimation,
+    UIManager
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- CORRECCIÓN IMPORTANTE
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useAuth } from '../context/AuthContext'; // Tu contexto
+import { useAuth } from '../context/AuthContext';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
-// --- COMPONENTES UI (Inputs, Botones) ---
+// Habilitar animaciones de layout para Android
+if (Platform.OS === 'android') {
+    if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+}
+
+// --- COMPONENTES UI ---
 
 const ModernInput = ({ icon, placeholder, value, onChangeText, secureTextEntry, keyboardType, autoCapitalize, error, onFocus, onBlur }) => {
     const [isFocused, setIsFocused] = useState(false);
@@ -47,7 +56,8 @@ const ModernInput = ({ icon, placeholder, value, onChangeText, secureTextEntry, 
                     autoCapitalize={autoCapitalize}
                     onFocus={() => { setIsFocused(true); if(onFocus) onFocus(); }}
                     onBlur={() => { setIsFocused(false); if(onBlur) onBlur(); }}
-                    cursorColor="#FDB813"
+                    // cursorColor solo funciona en Android API 29+, usamos selectionColor para compatibilidad general
+                    selectionColor="#FDB813" 
                 />
                 {error && <Feather name="alert-circle" size={20} color="#EF4444" />}
                 {!error && value.length > 0 && !secureTextEntry && (
@@ -68,30 +78,23 @@ const PasswordStrength = ({ password }) => {
         { label: 'Mayúscula', valid: /[A-Z]/.test(password) },
     ];
     
-    // Calcula fuerza (0-3)
     const strength = criteria.filter(c => c.valid).length;
-    const colors = ['#EF4444', '#F59E0B', '#10B981']; // Rojo, Amarillo, Verde
-    const widthAnim = useRef(new Animated.Value(0)).current;
-
+    const colors = ['#EF4444', '#F59E0B', '#10B981']; 
+    
+    // CORRECCIÓN: Usamos LayoutAnimation en lugar de Animated para el ancho
+    // Esto evita el error "Expected static flag was missing"
     useEffect(() => {
-        Animated.timing(widthAnim, {
-            toValue: (strength / 3) * 100,
-            duration: 300,
-            useNativeDriver: false,
-        }).start();
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     }, [strength]);
 
     return (
         <View style={styles.passwordStrengthContainer}>
             <View style={styles.strengthBarBg}>
-                <Animated.View 
+                <View 
                     style={[
                         styles.strengthBarFill, 
                         { 
-                            width: widthAnim.interpolate({
-                                inputRange: [0, 100],
-                                outputRange: ['0%', '100%']
-                            }),
+                            width: `${(strength / 3) * 100}%`, // Ancho simple
                             backgroundColor: colors[strength - 1] || '#333'
                         }
                     ]} 
@@ -115,31 +118,30 @@ const SocialButton = ({ icon, text, onPress }) => (
     </TouchableOpacity>
 );
 
-
 // --- PANTALLA PRINCIPAL ---
 
 const RegisterScreen = () => {
     const navigation = useNavigation();
-    const { register } = useAuth(); // Hook del contexto
+    const { register } = useAuth();
     
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         password: '',
         restaurantName: '',
-        // phoneNumber: '' // Opcional, lo pedimos después o lo dejamos vacío
     });
     
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
 
-    // Validaciones
     const validate = () => {
         const newErrors = {};
         if (!formData.name.trim()) newErrors.name = "Tu nombre es requerido";
+        // Regex robusto para email
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
         if (!formData.email.trim()) newErrors.email = "El correo es requerido";
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) newErrors.email = "Correo inválido";
+        else if (!emailRegex.test(formData.email)) newErrors.email = "Correo inválido";
         
         if (!formData.password) newErrors.password = "La contraseña es requerida";
         else if (formData.password.length < 8) newErrors.password = "Mínimo 8 caracteres";
@@ -157,37 +159,29 @@ const RegisterScreen = () => {
         }
 
         setIsLoading(true);
-        setErrors({}); // Limpiar errores previos
+        setErrors({}); 
 
         try {
-            // 1. Preparar datos para el endpoint
-            // El backend espera: name, email, password, restaurantName
             const payload = {
                 name: formData.name,
-                email: formData.email.toLowerCase(),
+                email: formData.email.toLowerCase().trim(),
                 password: formData.password,
                 restaurantName: formData.restaurantName,
-                phoneNumber: '' // Enviamos vacío o null si es opcional en tu modelo
+                phoneNumber: ''
             };
 
-            // 2. Llamar al AuthContext (Auto-login incluido)
             await register(payload);
 
-            // 3. Éxito
             if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             
-            // "Quick Win": Redirigir a Planes directamente
+            // CORRECCIÓN PANTALLA NEGRA:
+            // Al hacer replace, esta pantalla se desmonta. NO debemos llamar a setIsLoading(false) después.
             navigation.replace('Plans');
 
         } catch (error) {
-            // --- LOGGING PROFESIONAL (DEV) ---
-            console.error('[RegisterScreen] Error detallado:', {
-                message: error.message,
-                status: error.response?.status,
-                data: error.response?.data
-            });
+            // Solo logueamos en sistema, no mostramos error feo al usuario
+            console.log('[RegisterSystem] Error:', error.message);
 
-            // --- UX AMIGABLE (USER) ---
             let userMessage = 'Ocurrió un problema inesperado. Por favor intenta de nuevo.';
             
             if (error.response?.status === 409) {
@@ -199,13 +193,14 @@ const RegisterScreen = () => {
             Alert.alert('No pudimos crear tu cuenta', userMessage);
             
             if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        } finally {
+            
+            // Solo desactivamos loading si HUBO error (la pantalla sigue viva)
             setIsLoading(false);
         }
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             <StatusBar barStyle="light-content" backgroundColor="#000" />
             
             <KeyboardAvoidingView 
@@ -224,7 +219,7 @@ const RegisterScreen = () => {
                         <Text style={styles.subtitle}>Crea tu cuenta en segundos y digitaliza tu restaurante hoy mismo.</Text>
                     </View>
 
-                    {/* Formulario Unificado */}
+                    {/* Formulario */}
                     <View style={styles.form}>
                         <ModernInput 
                             icon="user" 
@@ -272,10 +267,8 @@ const RegisterScreen = () => {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Indicador de contraseña (UX) */}
                         <PasswordStrength password={formData.password} />
 
-                        {/* Botón Principal */}
                         <TouchableOpacity 
                             style={[styles.submitButton, isLoading && styles.buttonDisabled]} 
                             onPress={handleRegister}
@@ -296,26 +289,22 @@ const RegisterScreen = () => {
                             </LinearGradient>
                         </TouchableOpacity>
 
-                        {/* Términos (Inline, sin fricción) */}
                         <Text style={styles.termsText}>
                             Al registrarte, aceptas nuestros <Text style={styles.link}>Términos</Text> y <Text style={styles.link}>Privacidad</Text>.
                         </Text>
 
-                        {/* Separador */}
                         <View style={styles.divider}>
                             <View style={styles.line} />
                             <Text style={styles.dividerText}>o regístrate con</Text>
                             <View style={styles.line} />
                         </View>
 
-                        {/* Social Login */}
                         <View style={styles.socialContainer}>
                             <SocialButton icon="google" onPress={() => {}} />
                             <SocialButton icon="apple" onPress={() => {}} />
                         </View>
                     </View>
 
-                    {/* Footer Login */}
                     <View style={styles.footer}>
                         <Text style={styles.footerText}>¿Ya tienes cuenta? </Text>
                         <TouchableOpacity onPress={() => navigation.navigate('Login')}>
@@ -337,6 +326,7 @@ const styles = StyleSheet.create({
     scrollContent: {
         flexGrow: 1,
         padding: 24,
+        paddingBottom: 40,
     },
     backButton: {
         marginTop: 10,
@@ -402,6 +392,7 @@ const styles = StyleSheet.create({
     },
     strengthBarFill: {
         height: '100%',
+        borderRadius: 2,
     },
     criteriaRow: {
         flexDirection: 'row',
@@ -482,7 +473,7 @@ const styles = StyleSheet.create({
     footer: {
         flexDirection: 'row',
         justifyContent: 'center',
-        marginTop: 'auto',
+        marginTop: 20,
     },
     footerText: {
         color: '#A0A0A0',
