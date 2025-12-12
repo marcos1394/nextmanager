@@ -23,7 +23,7 @@ import api from '../services/api';
 const { width } = Dimensions.get('window');
 
 // ------------------------------------------------------------------
-// --- COMPONENTES UI AUXILIARES ---
+// --- COMPONENTES UI (Igual que antes) ---
 // ------------------------------------------------------------------
 
 const AnimatedHeader = ({ totalSales, isLive }) => {
@@ -143,7 +143,7 @@ const DetailRow = ({ label, value, isLast }) => (
 );
 
 // ------------------------------------------------------------------
-// --- MONITOR SCREEN (PRINCIPAL) ---
+// --- MONITOR SCREEN (LÓGICA CORREGIDA) ---
 // ------------------------------------------------------------------
 
 const MonitorScreen = ({ navigation }) => {
@@ -161,20 +161,20 @@ const MonitorScreen = ({ navigation }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isLive, setIsLive] = useState(true);
     const [error, setError] = useState(null);
-    const [hasRestaurant, setHasRestaurant] = useState(false); // <-- NUEVO ESTADO
+    const [hasRestaurant, setHasRestaurant] = useState(false);
 
     // --- FUNCIÓN DE CARGA ---
     const fetchData = useCallback(async () => {
         // 1. Verificación Crítica: ¿Tiene restaurante?
         if (!user?.restaurants || user.restaurants.length === 0) {
             console.log('[Monitor] Usuario sin restaurante configurado.');
-            setHasRestaurant(false); // Marcamos que no hay restaurante
-            setIsLoading(false);     // Dejamos de cargar
+            setHasRestaurant(false); // No tiene restaurante
+            setIsLoading(false);     // IMPORTANTE: Dejamos de cargar para mostrar el Empty State
             return;
         }
 
-        // Si sí tiene, procedemos
-        setHasRestaurant(true);
+        // Si llegamos aquí, SÍ tiene restaurante
+        setHasRestaurant(true); 
         const restaurantId = user.restaurants[0].id;
 
         try {
@@ -241,12 +241,20 @@ const MonitorScreen = ({ navigation }) => {
         }
     }, [user]);
 
-    // Polling solo si hay restaurante
+    // --- CORRECCIÓN DEL USEEFFECT (EL BUG ESTABA AQUÍ) ---
     useEffect(() => {
-        if(isLive && hasRestaurant) fetchData();
-        const interval = setInterval(() => { if(isLive && hasRestaurant) fetchData() }, 15000);
-        return () => clearInterval(interval);
-    }, [isLive, hasRestaurant, fetchData]);
+        // Ejecutamos SIEMPRE al inicio para verificar si tiene restaurante o no
+        fetchData(); 
+
+        // Solo configuramos el intervalo SI tiene restaurante y está en vivo
+        let interval;
+        if (isLive && hasRestaurant) {
+            interval = setInterval(fetchData, 15000);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isLive, hasRestaurant, fetchData]); // Dependencias corregidas
 
     const onRefresh = useCallback(() => {
         setIsRefreshing(true);
@@ -272,7 +280,8 @@ const MonitorScreen = ({ navigation }) => {
     }
 
     // --- RENDERIZADO 2: NO HAY RESTAURANTE (CASO USUARIO NUEVO) ---
-    if (!hasRestaurant && !isLoading) {
+    // Si ya terminó de cargar (!isLoading) y no tiene restaurante (!hasRestaurant)
+    if (!isLoading && !hasRestaurant) {
         return (
             <SafeAreaView style={styles.container} edges={['top']}>
                 <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
@@ -284,12 +293,13 @@ const MonitorScreen = ({ navigation }) => {
                     </View>
                     <Text style={styles.emptyStateTitle}>¡Bienvenido a NextManager!</Text>
                     <Text style={styles.emptyStateText}>
-                        Para comenzar a monitorear tus ventas en tiempo real, necesitas activar un plan y conectar tu restaurante.
+                        Tu cuenta está lista. Para ver tus ventas en tiempo real, necesitas activar un plan y conectar tu restaurante.
                     </Text>
                     
                     <TouchableOpacity 
                         style={styles.actionButton}
                         onPress={() => navigation.navigate('Plans')}
+                        activeOpacity={0.8}
                     >
                         <LinearGradient
                             colors={['#FDB813', '#F59E0B']}
@@ -297,7 +307,7 @@ const MonitorScreen = ({ navigation }) => {
                             end={{ x: 1, y: 0 }}
                             style={styles.actionButtonGradient}
                         >
-                            <Text style={styles.actionButtonText}>Ver Planes y Configurar</Text>
+                            <Text style={styles.actionButtonText}>Ver Planes y Activar</Text>
                             <Feather name="arrow-right" size={20} color="#000" />
                         </LinearGradient>
                     </TouchableOpacity>
@@ -391,8 +401,6 @@ const styles = StyleSheet.create({
     gradient: { ...StyleSheet.absoluteFillObject },
     centerContent: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { color: '#888', marginTop: 10 },
-    
-    // Header
     header: { paddingHorizontal: 20, paddingBottom: 15, paddingTop: 10 },
     headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
@@ -404,8 +412,6 @@ const styles = StyleSheet.create({
     liveIndicatorBlur: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
     liveDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6 },
     liveText: { fontSize: 10, fontWeight: 'bold' },
-
-    // Stats
     quickStatsContainer: { marginBottom: 24 },
     quickStatsScroll: { paddingHorizontal: 20, paddingRight: 40 },
     statCardContainer: { marginRight: 12, minWidth: 130 },
@@ -414,8 +420,6 @@ const styles = StyleSheet.create({
     statIconContainer: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(16, 185, 129, 0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
     statValue: { fontSize: 16, fontWeight: 'bold', color: 'white', marginBottom: 2 },
     statLabel: { fontSize: 11, color: '#9CA3AF' },
-
-    // Waiter Card
     waiterCard: { marginBottom: 12, marginHorizontal: 20, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     waiterCardGradient: { padding: 16 },
     waiterHeader: { flexDirection: 'row', alignItems: 'center' },
@@ -432,20 +436,13 @@ const styles = StyleSheet.create({
     progressSection: { marginTop: 10 },
     progressBarBackground: { height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
     progressBar: { height: '100%', borderRadius: 3 },
-
     sectionHeader: { paddingHorizontal: 20, marginBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     sectionTitle: { fontSize: 18, fontWeight: '600', color: 'white' },
-    liveToggle: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-    liveToggleText: { fontSize: 11, fontWeight: '600', marginLeft: 4 },
-
     emptyContainer: { alignItems: 'center', marginTop: 40, paddingHorizontal: 40 },
     emptyText: { color: '#888', marginBottom: 20, textAlign: 'center' },
     retryButton: { backgroundColor: '#333', padding: 10, borderRadius: 8 },
     retryText: { color: 'white' },
-    
     listContent: { paddingBottom: 40 },
-    
-    // Footer Cards
     footerContainer: { paddingHorizontal: 20, marginTop: 10 },
     infoCard: { backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
     infoCardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
