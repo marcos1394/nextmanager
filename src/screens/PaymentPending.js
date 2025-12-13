@@ -1,461 +1,216 @@
-// screens/PaymentPendingScreen.js
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     View,
     Text,
     StyleSheet,
+    TouchableOpacity,
     StatusBar,
-    SafeAreaView,
     Animated,
     Dimensions,
-    Platform,
-    TouchableOpacity
+    ScrollView,
+    BackHandler,
+    Linking
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useAuth } from '../context/AuthContext';
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 
-// --- COMPONENTES ANIMADOS MEJORADOS ---
+const { width } = Dimensions.get('window');
 
-const EnhancedProgressBar = () => {
-    const progressAnim = useRef(new Animated.Value(0)).current;
-    const shimmerAnim = useRef(new Animated.Value(0)).current;
+// ------------------------------------------------------------------
+// --- COMPONENTES UI AUXILIARES ---
+// ------------------------------------------------------------------
+
+const DetailRow = ({ label, value, copyable }) => (
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.detailValue}>{value}</Text>
+            {copyable && <Feather name="copy" size={12} color="#888" style={{ marginLeft: 6 }} />}
+        </View>
+    </View>
+);
+
+// Reutilizamos una versión simplificada de la tarjeta de plan para contexto visual
+const MiniPlanCard = ({ planName, price }) => (
+    <View style={styles.miniCard}>
+        <LinearGradient
+            colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.02)']}
+            style={styles.miniCardContent}
+        >
+            <View style={styles.miniIconBox}>
+                <MaterialCommunityIcons name="clock-outline" size={20} color="#F59E0B" />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.miniCardLabel}>Suscripción Solicitada</Text>
+                <Text style={styles.miniCardTitle}>{planName || 'Plan NextManager'}</Text>
+            </View>
+            <Text style={styles.miniCardPrice}>${price?.toLocaleString('es-MX')}</Text>
+        </LinearGradient>
+    </View>
+);
+
+// ------------------------------------------------------------------
+// --- PANTALLA PRINCIPAL: PAYMENT PENDING ---
+// ------------------------------------------------------------------
+
+const PaymentPendingScreen = () => {
+    const navigation = useNavigation();
+    const route = useRoute();
+
+    // 1. Obtener parámetros de Mercado Pago
+    // 'payment_type' nos ayuda a saber si fue Ticket (Oxxo) o Tarjeta
+    const { 
+        payment_id = 'Pendiente', 
+        status = 'in_process', 
+        payment_type, 
+        plan = {} 
+    } = route.params || {};
+
+    // Animaciones
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-        // Animación principal de la barra
-        Animated.loop(
-            Animated.timing(progressAnim, {
-                toValue: 1,
-                duration: 2000,
-                useNativeDriver: true,
-            })
-        ).start();
+        // Feedback háptico de advertencia (suave)
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-        // Efecto shimmer
+        // Bloquear botón atrás físico (Android)
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
+
+        // Animación de entrada
+        Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+        }).start();
+
+        // Animación de pulso continuo para el reloj
         Animated.loop(
             Animated.sequence([
-                Animated.timing(shimmerAnim, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(shimmerAnim, {
-                    toValue: 0,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
+                Animated.timing(pulseAnim, { toValue: 1.1, duration: 1000, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
             ])
         ).start();
+
+        return () => backHandler.remove();
     }, []);
 
-    const translateX = progressAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-120, screenWidth * 0.85 + 20],
-    });
+    const handleContinue = () => {
+        // Redirigimos al Monitor. El backend eventualmente actualizará el estado del usuario
+        // vía Webhook cuando el pago se concrete.
+        navigation.dispatch(
+            CommonActions.reset({
+                index: 0,
+                routes: [{ name: 'Monitor' }],
+            })
+        );
+    };
 
-    const shimmerTranslateX = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-100, screenWidth * 0.85 + 100],
-    });
+    const handleHelp = () => {
+        // Opción para contactar soporte si tarda mucho
+        Linking.openURL('https://wa.me/521XXXXXXXXXX?text=Tengo%20un%20problema%20con%20mi%20pago%20pendiente');
+    };
+
+    // Mensaje dinámico según el tipo de pago
+    const getMessage = () => {
+        if (payment_type === 'ticket' || payment_type === 'bank_transfer') {
+            return "Tu referencia de pago ha sido generada. Una vez que realices el depósito, tu plan se activará automáticamente.";
+        }
+        return "Estamos procesando tu pago con el banco. Esto puede tomar unos minutos. No es necesario que vuelvas a pagar.";
+    };
 
     return (
-        <View style={styles.progressContainer}>
-            <View style={styles.progressBarBackground}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+            <StatusBar barStyle="light-content" backgroundColor="#000" />
+            <LinearGradient colors={['#000000', '#111111']} style={StyleSheet.absoluteFillObject} />
+
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                
+                {/* 1. Icono de Pendiente (Reloj de Arena) */}
+                <View style={styles.iconContainer}>
+                    <Animated.View style={[styles.iconWrapper, { transform: [{ scale: pulseAnim }] }]}>
+                        <LinearGradient
+                            colors={['#F59E0B', '#D97706']} // Naranja/Ámbar
+                            style={styles.iconGradient}
+                        >
+                            <MaterialCommunityIcons name="timer-sand" size={56} color="#FFF" />
+                        </LinearGradient>
+                        {/* Brillo naranja */}
+                        <View style={styles.glowEffect} />
+                    </Animated.View>
+                </View>
+
+                {/* 2. Textos Principales */}
+                <Animated.View style={{ opacity: fadeAnim, alignItems: 'center', width: '100%' }}>
+                    <Text style={styles.title}>Pago en Proceso</Text>
+                    <Text style={styles.subtitle}>
+                        {getMessage()}
+                    </Text>
+                </Animated.View>
+
+                {/* 3. Tarjeta Resumen */}
+                <Animated.View style={{ opacity: fadeAnim, width: '100%', marginBottom: 20 }}>
+                    <MiniPlanCard planName={plan?.name} price={plan?.price} />
+                </Animated.View>
+
+                {/* 4. Detalles Técnicos */}
                 <Animated.View 
                     style={[
-                        styles.progressBarFill, 
-                        { transform: [{ translateX }] }
+                        styles.detailsCard, 
+                        { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }
                     ]}
                 >
-                    <LinearGradient
-                        colors={['#FDB813', '#F59E0B', '#FDB813']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.progressGradient}
-                    />
-                </Animated.View>
-                
-                <Animated.View
-                    style={[
-                        styles.shimmerOverlay,
-                        { transform: [{ translateX: shimmerTranslateX }] }
-                    ]}
-                />
-            </View>
-            
-            <View style={styles.progressDots}>
-                {[0, 1, 2].map((index) => (
-                    <ProgressDot key={index} delay={index * 400} />
-                ))}
-            </View>
-        </View>
-    );
-};
-
-const ProgressDot = ({ delay }) => {
-    const scaleAnim = useRef(new Animated.Value(0.5)).current;
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(scaleAnim, {
-                        toValue: 1,
-                        duration: 600,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(scaleAnim, {
-                        toValue: 0.5,
-                        duration: 600,
-                        useNativeDriver: true,
-                    }),
-                ])
-            ).start();
-        }, delay);
-
-        return () => clearTimeout(timer);
-    }, [delay]);
-
-    return (
-        <Animated.View
-            style={[
-                styles.progressDot,
-                { transform: [{ scale: scaleAnim }] }
-            ]}
-        />
-    );
-};
-
-const ProcessingAnimation = () => {
-    const rotateAnim = useRef(new Animated.Value(0)).current;
-    const pulse1Anim = useRef(new Animated.Value(0)).current;
-    const pulse2Anim = useRef(new Animated.Value(0)).current;
-    const pulse3Anim = useRef(new Animated.Value(0)).current;
-    const iconScaleAnim = useRef(new Animated.Value(1)).current;
-
-    useEffect(() => {
-        // Rotación del anillo exterior
-        Animated.loop(
-            Animated.timing(rotateAnim, {
-                toValue: 1,
-                duration: 3000,
-                useNativeDriver: true,
-            })
-        ).start();
-
-        // Pulsos escalonados
-        const createPulse = (anim, delay) => {
-            setTimeout(() => {
-                Animated.loop(
-                    Animated.sequence([
-                        Animated.timing(anim, {
-                            toValue: 1,
-                            duration: 2000,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(anim, {
-                            toValue: 0,
-                            duration: 2000,
-                            useNativeDriver: true,
-                        }),
-                    ])
-                ).start();
-            }, delay);
-        };
-
-        createPulse(pulse1Anim, 0);
-        createPulse(pulse2Anim, 700);
-        createPulse(pulse3Anim, 1400);
-
-        // Pulso del ícono
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(iconScaleAnim, {
-                    toValue: 1.1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(iconScaleAnim, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-    }, []);
-
-    const rotation = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
-
-    const createPulseStyle = (anim) => ({
-        opacity: anim.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [0, 0.15, 0],
-        }),
-        transform: [{
-            scale: anim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [1, 2.5],
-            })
-        }],
-    });
-
-    return (
-        <View style={styles.animationContainer}>
-            {/* Pulsos concéntricos */}
-            <Animated.View style={[styles.pulseCircle, styles.pulse1, createPulseStyle(pulse1Anim)]} />
-            <Animated.View style={[styles.pulseCircle, styles.pulse2, createPulseStyle(pulse2Anim)]} />
-            <Animated.View style={[styles.pulseCircle, styles.pulse3, createPulseStyle(pulse3Anim)]} />
-
-            {/* Anillo rotatorio */}
-            <Animated.View
-                style={[
-                    styles.rotatingRing,
-                    { transform: [{ rotate: rotation }] }
-                ]}
-            >
-                <View style={styles.ringSegment} />
-                <View style={[styles.ringSegment, styles.ringSegment2]} />
-                <View style={[styles.ringSegment, styles.ringSegment3]} />
-            </Animated.View>
-
-            {/* Contenedor del ícono */}
-            <Animated.View
-                style={[
-                    styles.iconContainer,
-                    { transform: [{ scale: iconScaleAnim }] }
-                ]}
-            >
-                <LinearGradient
-                    colors={['#2a2a2a', '#1e1e1e']}
-                    style={styles.iconBackground}
-                >
-                    <MaterialCommunityIcons 
-                        name="shield-check" 
-                        size={48} 
-                        color="#FDB813" 
-                    />
-                </LinearGradient>
-            </Animated.View>
-        </View>
-    );
-};
-
-const ProcessingSteps = () => {
-    const [currentStep, setCurrentStep] = useState(0);
-    const fadeAnims = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
-
-    const steps = [
-        { icon: 'shield-search', text: 'Verificando datos de seguridad' },
-        { icon: 'bank-transfer', text: 'Procesando con el banco' },
-        { icon: 'check-circle', text: 'Confirmando transacción' },
-    ];
-
-    useEffect(() => {
-        const cycleSteps = () => {
-            steps.forEach((_, index) => {
-                setTimeout(() => {
-                    setCurrentStep(index);
-                    Animated.timing(fadeAnims[index], {
-                        toValue: 1,
-                        duration: 500,
-                        useNativeDriver: true,
-                    }).start(() => {
-                        if (index < steps.length - 1) {
-                            Animated.timing(fadeAnims[index], {
-                                toValue: 0.3,
-                                duration: 500,
-                                useNativeDriver: true,
-                            }).start();
-                        }
-                    });
-                }, index * 2500);
-            });
-        };
-
-        cycleSteps();
-        const interval = setInterval(cycleSteps, steps.length * 2500);
-        
-        return () => clearInterval(interval);
-    }, []);
-
-    return (
-        <View style={styles.stepsContainer}>
-            {steps.map((step, index) => (
-                <Animated.View
-                    key={index}
-                    style={[
-                        styles.stepItem,
-                        {
-                            opacity: fadeAnims[index],
-                            backgroundColor: currentStep === index 
-                                ? 'rgba(253, 184, 19, 0.1)' 
-                                : 'transparent',
-                        }
-                    ]}
-                >
-                    <View style={styles.stepIcon}>
-                        <MaterialCommunityIcons
-                            name={step.icon}
-                            size={16}
-                            color={currentStep === index ? '#FDB813' : '#A0A0A0'}
-                        />
-                    </View>
-                    <Text
-                        style={[
-                            styles.stepText,
-                            {
-                                color: currentStep === index ? '#FFFFFF' : '#A0A0A0',
-                                fontWeight: currentStep === index ? '600' : '400',
-                            }
-                        ]}
-                    >
-                        {step.text}
-                    </Text>
-                </Animated.View>
-            ))}
-        </View>
-    );
-};
-
-// --- COMPONENTE PRINCIPAL ---
-const PaymentPendingScreen = () => {
-    const route = useRoute();
-    const navigation = useNavigation();
-    const { verifySession } = useAuth();
-
-    const [timeElapsed, setTimeElapsed] = useState(0);
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(50)).current;
-    const { purchaseId } = route.params;
-
-    useEffect(() => {
-        if (!purchaseId) {
-            navigation.navigate('Dashboard');
-            return;
-        }
-
-        // --- LÓGICA DE POLLING ---
-        const interval = setInterval(async () => {
-            try {
-                const response = await api.get(`/payments/purchase-status/${purchaseId}`);
-                const data = await response.data;
-
-                if (data.success && data.status === 'active') {
-                    clearInterval(interval);
-                    await verifySession();
-                    navigation.replace('PaymentSuccess');
-                } else if (data.success && data.status === 'rejected') {
-                    clearInterval(interval);
-                    navigation.replace('PaymentFailure');
-                }
-            } catch (error) {
-                console.error("Error verificando estado de pago:", error);
-            }
-        }, 3000);
-
-        return () => clearInterval(interval);
-    }, [purchaseId, navigation, verifySession]);
-
-
-    const formatTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handleCancel = () => {
-        // Aquí podrías mostrar un modal de confirmación
-        // y manejar la cancelación del pago si es posible
-        navigation.goBack();
-    };
-
-    return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#121212" translucent />
-            
-            <LinearGradient 
-                colors={['#1a1a1a', '#121212', '#0f0f0f']} 
-                locations={[0, 0.6, 1]}
-                style={styles.gradient}
-            >
-                <Animated.View
-                    style={[
-                        styles.content,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ translateY: slideAnim }]
-                        }
-                    ]}
-                >
-                    {/* Indicador de tiempo */}
-                    <View style={styles.timeIndicator}>
-                        <MaterialCommunityIcons name="clock-outline" size={16} color="#A0A0A0" />
-                        <Text style={styles.timeText}>
-                            Tiempo transcurrido: {formatTime(timeElapsed)}
-                        </Text>
-                    </View>
-
-                    {/* Animación principal */}
-                    <ProcessingAnimation />
-
-                    {/* Contenido textual */}
-                    <View style={styles.textContainer}>
-                        <Text style={styles.title}>Procesando tu Pago</Text>
-                        <Text style={styles.subtitle}>
-                            Estamos confirmando tu transacción de forma segura con nuestros 
-                            proveedores de pago. Este proceso puede tomar hasta 3 minutos.
-                        </Text>
+                    <BlurView intensity={10} tint="dark" style={styles.blurContainer}>
+                        <View style={styles.detailsHeader}>
+                            <Text style={styles.detailsTitle}>Estatus del Pedido</Text>
+                            <View style={styles.statusBadge}>
+                                <Text style={styles.statusText}>PENDIENTE</Text>
+                            </View>
+                        </View>
                         
-                        <View style={styles.warningContainer}>
-                            <MaterialCommunityIcons name="alert-circle" size={20} color="#F59E0B" />
-                            <Text style={styles.warningText}>
-                                Por favor, mantén la aplicación abierta durante el proceso
+                        <View style={styles.divider} />
+                        
+                        <DetailRow label="Referencia" value={`#${payment_id}`} copyable />
+                        <DetailRow label="Fecha" value={new Date().toLocaleDateString('es-MX')} />
+                        <DetailRow label="Método" value="Mercado Pago" />
+                        
+                        <View style={styles.infoBox}>
+                            <Feather name="info" size={14} color="#F59E0B" style={{marginTop: 2}} />
+                            <Text style={styles.infoText}>
+                                Te enviaremos un correo electrónico cuando el pago sea confirmado.
                             </Text>
                         </View>
-                    </View>
-
-                    {/* Barra de progreso mejorada */}
-                    <EnhancedProgressBar />
-
-                    {/* Steps del proceso */}
-                    <ProcessingSteps />
-
-                    {/* Información de seguridad */}
-                    <View style={styles.securityInfo}>
-                        <View style={styles.securityBadge}>
-                            <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
-                            <Text style={styles.securityText}>Transacción Segura SSL</Text>
-                        </View>
-                        
-                        <View style={styles.securityFeatures}>
-                            <View style={styles.securityFeature}>
-                                <MaterialCommunityIcons name="bank" size={14} color="#A0A0A0" />
-                                <Text style={styles.securityFeatureText}>Procesado por bancos certificados</Text>
-                            </View>
-                            <View style={styles.securityFeature}>
-                                <MaterialCommunityIcons name="lock" size={14} color="#A0A0A0" />
-                                <Text style={styles.securityFeatureText}>Encriptación de extremo a extremo</Text>
-                            </View>
-                        </View>
-                    </View>
+                    </BlurView>
                 </Animated.View>
 
-                {/* Footer con información de contacto */}
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>
-                        ¿Tienes problemas? Contacta nuestro soporte
-                    </Text>
-                    <TouchableOpacity style={styles.supportButton}>
-                        <MaterialCommunityIcons name="headphones" size={16} color="#FDB813" />
-                        <Text style={styles.supportButtonText}>Soporte 24/7</Text>
-                    </TouchableOpacity>
-                </View>
-            </LinearGradient>
+            </ScrollView>
+
+            {/* 5. Footer con Acciones */}
+            <View style={styles.footer}>
+                <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={handleContinue}
+                    activeOpacity={0.9}
+                >
+                    <LinearGradient
+                        colors={['#333', '#444']} // Botón neutro, no de éxito todavía
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.buttonGradient}
+                    >
+                        <Text style={styles.buttonText}>Ir al Dashboard</Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={handleHelp} style={styles.helpLink}>
+                    <Text style={styles.helpText}>¿Tienes problemas? Contáctanos</Text>
+                </TouchableOpacity>
+            </View>
+
         </SafeAreaView>
     );
 };
@@ -463,280 +218,210 @@ const PaymentPendingScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#121212',
+        backgroundColor: '#000',
     },
-    gradient: {
-        flex: 1,
-        justifyContent: 'center',
-        paddingHorizontal: 20,
-    },
-    content: {
+    scrollContent: {
+        paddingHorizontal: 24,
+        paddingTop: 40,
+        paddingBottom: 100,
         alignItems: 'center',
-        flex: 1,
+    },
+    
+    // Icono
+    iconContainer: {
+        marginBottom: 24,
+        alignItems: 'center',
         justifyContent: 'center',
     },
-
-    // Time Indicator
-    timeIndicator: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginBottom: 40,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    timeText: {
-        color: '#A0A0A0',
-        fontSize: 12,
-        fontWeight: '500',
-        marginLeft: 8,
-    },
-
-    // Animation Styles
-    animationContainer: {
-        width: 220,
-        height: 220,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 40,
+    iconWrapper: {
         position: 'relative',
     },
-    pulseCircle: {
-        position: 'absolute',
-        borderRadius: 110,
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-    },
-    pulse1: { width: 200, height: 200 },
-    pulse2: { width: 160, height: 160 },
-    pulse3: { width: 120, height: 120 },
-    rotatingRing: {
-        position: 'absolute',
-        width: 180,
-        height: 180,
-        borderRadius: 90,
-    },
-    ringSegment: {
-        position: 'absolute',
-        width: 4,
-        height: 20,
-        backgroundColor: '#FDB813',
-        borderRadius: 2,
-        top: 0,
-        left: '50%',
-        marginLeft: -2,
-    },
-    ringSegment2: {
-        transform: [{ rotate: '120deg' }],
-    },
-    ringSegment3: {
-        transform: [{ rotate: '240deg' }],
-    },
-    iconContainer: {
+    iconGradient: {
         width: 100,
         height: 100,
         borderRadius: 50,
-        overflow: 'hidden',
-        zIndex: 1,
-        shadowColor: '#FDB813',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 16,
-    },
-    iconBackground: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 2,
-        borderColor: 'rgba(253, 184, 19, 0.3)',
+        zIndex: 2,
+        shadowColor: "#F59E0B",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.4,
+        shadowRadius: 20,
+        elevation: 15,
+    },
+    glowEffect: {
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        right: 10,
+        bottom: 10,
+        borderRadius: 50,
+        backgroundColor: '#F59E0B',
+        opacity: 0.3,
+        transform: [{ scale: 1.3 }],
+        zIndex: 1,
     },
 
-    // Text Styles
-    textContainer: {
-        alignItems: 'center',
-        marginBottom: 32,
-        paddingHorizontal: 20,
-    },
+    // Textos
     title: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: '#FFFFFF',
+        color: '#FFF',
+        marginBottom: 10,
         textAlign: 'center',
-        marginBottom: 16,
-        letterSpacing: -0.5,
     },
     subtitle: {
         fontSize: 16,
         color: '#A0A0A0',
         textAlign: 'center',
         lineHeight: 24,
-        marginBottom: 20,
-        maxWidth: screenWidth * 0.85,
-    },
-    warningContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(245, 158, 11, 0.2)',
-    },
-    warningText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#F59E0B',
-        marginLeft: 12,
-        flex: 1,
-        textAlign: 'center',
+        marginBottom: 30,
+        paddingHorizontal: 10,
     },
 
-    // Progress Bar Styles
-    progressContainer: {
+    // Mini Plan Card
+    miniCard: {
         width: '100%',
-        alignItems: 'center',
-        marginBottom: 32,
+        borderRadius: 12,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: '#1A1A1A',
     },
-    progressBarBackground: {
+    miniCardContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+    },
+    miniIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 10,
+        backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    miniCardLabel: {
+        fontSize: 10,
+        color: '#888',
+        textTransform: 'uppercase',
+        fontWeight: '600',
+    },
+    miniCardTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#FFF',
+    },
+    miniCardPrice: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#F59E0B',
+    },
+
+    // Detalles Card
+    detailsCard: {
         width: '100%',
-        height: 6,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 3,
+        borderRadius: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.03)',
+    },
+    blurContainer: {
+        padding: 20,
+    },
+    detailsHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 5,
+    },
+    detailsTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFF',
+    },
+    statusBadge: {
+        backgroundColor: 'rgba(245, 158, 11, 0.2)', // Fondo naranja transparente
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+    },
+    statusText: {
+        color: '#F59E0B', // Texto naranja
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    divider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginVertical: 15,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    detailLabel: {
+        color: '#888',
+        fontSize: 14,
+    },
+    detailValue: {
+        color: '#DDD',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    
+    // Info Box
+    infoBox: {
+        flexDirection: 'row',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        padding: 12,
+        borderRadius: 8,
+        marginTop: 10,
+        gap: 8,
+    },
+    infoText: {
+        color: '#F59E0B',
+        fontSize: 12,
+        lineHeight: 18,
+        flex: 1,
+    },
+
+    // Footer
+    footer: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        paddingHorizontal: 24,
+        paddingBottom: Platform.OS === 'ios' ? 10 : 24,
+    },
+    actionButton: {
+        width: '100%',
+        borderRadius: 14,
         overflow: 'hidden',
         marginBottom: 16,
-        position: 'relative',
     },
-    progressBarFill: {
-        height: '100%',
-        width: 120,
-    },
-    progressGradient: {
-        flex: 1,
-        borderRadius: 3,
-    },
-    shimmerOverlay: {
-        position: 'absolute',
-        top: 0,
-        width: 50,
-        height: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    },
-    progressDots: {
-        flexDirection: 'row',
+    buttonGradient: {
+        paddingVertical: 18,
         justifyContent: 'center',
-        gap: 8,
-    },
-    progressDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#FDB813',
-    },
-
-    // Steps Styles
-    stepsContainer: {
-        width: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    stepItem: {
-        flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 12,
-        marginBottom: 8,
     },
-    stepIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 16,
-    },
-    stepText: {
-        fontSize: 14,
-        flex: 1,
-        lineHeight: 20,
-    },
-
-    // Security Info Styles
-    securityInfo: {
-        width: '100%',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    securityBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.2)',
-    },
-    securityText: {
-        color: '#10B981',
-        fontSize: 12,
+    buttonText: {
+        color: '#FFF',
+        fontSize: 16,
         fontWeight: 'bold',
-        marginLeft: 8,
-        letterSpacing: 0.5,
     },
-    securityFeatures: {
+    helpLink: {
         alignItems: 'center',
-        gap: 8,
+        padding: 10,
     },
-    securityFeature: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    securityFeatureText: {
-        color: '#A0A0A0',
-        fontSize: 12,
-        marginLeft: 8,
-        textAlign: 'center',
-    },
-
-    // Footer Styles
-    footer: {
-        alignItems: 'center',
-        paddingVertical: 20,
-        paddingHorizontal: 20,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    },
-    footerText: {
-        color: '#A0A0A0',
-        fontSize: 12,
-        textAlign: 'center',
-        marginBottom: 12,
-    },
-    supportButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(253, 184, 19, 0.2)',
-    },
-    supportButtonText: {
-        color: '#FDB813',
-        fontSize: 12,
-        fontWeight: '600',
-        marginLeft: 8,
+    helpText: {
+        color: '#666',
+        fontSize: 14,
+        textDecorationLine: 'underline',
     },
 });
 

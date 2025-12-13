@@ -1,783 +1,281 @@
-// screens/PlanSelectionScreen.js
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
+    TouchableOpacity,
     ScrollView,
-    StatusBar,
-    Animated,
     Dimensions,
+    Animated,
     SafeAreaView,
-    FlatList,
-    Platform,
-    ActivityIndicator
+    StatusBar,
+    ActivityIndicator,
+    Alert
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { getAvailablePlans } from '../services/api'; // <-- 1. IMPORTA LA FUNCIÓN
+import api from '../services/api'; 
 
-
-
-const { width: screenWidth } = Dimensions.get('window');
-const CARD_WIDTH = screenWidth * 0.8;
+const { width } = Dimensions.get('window');
+const CARD_WIDTH = width * 0.85;
 const CARD_SPACING = 20;
-// En tus estilos tienes un marginRight de 20, así que el espacio total es:
-const ITEM_SIZE = CARD_WIDTH + 20;
 
-
-
-const AnimatedBillingToggle = ({ billingCycle, setBillingCycle }) => {
-    const slideAnim = useRef(new Animated.Value(billingCycle === 'monthly' ? 0 : 1)).current;
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-
-    useEffect(() => {
-        Animated.timing(slideAnim, {
-            toValue: billingCycle === 'monthly' ? 0 : 1,
-            duration: 250,
-            useNativeDriver: false,
-        }).start();
-    }, [billingCycle, slideAnim]);
-
-    const handleToggle = (cycle) => {
-        if (cycle !== billingCycle) {
-            setBillingCycle(cycle);
-            
-            // Animación de feedback
-            Animated.sequence([
-                Animated.timing(scaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: true }),
-                Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-            ]).start();
-            
-            if (Platform.OS === 'ios') {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }
-        }
-    };
-
-    const toggleWidth = 220;
-    const knobWidth = toggleWidth / 2 - 4;
-
-    return (
-        <View style={styles.toggleWrapper}>
-            <Animated.View 
-                style={[
-                    styles.toggleContainer,
-                    { transform: [{ scale: scaleAnim }] }
-                ]}
-            >
-                <Animated.View
-                    style={[
-                        styles.toggleKnob,
-                        {
-                            transform: [{
-                                translateX: slideAnim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [2, knobWidth + 2],
-                                })
-                            }],
-                            width: knobWidth,
-                        }
-                    ]}
-                />
-                
-                <TouchableOpacity
-                    style={[styles.toggleOption, { width: knobWidth + 4 }]}
-                    onPress={() => handleToggle('monthly')}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[
-                        styles.toggleText,
-                        billingCycle === 'monthly' && styles.toggleTextActive
-                    ]}>
-                        Mensual
-                    </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                    style={[styles.toggleOption, { width: knobWidth + 4 }]}
-                    onPress={() => handleToggle('annually')}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[
-                        styles.toggleText,
-                        billingCycle === 'annually' && styles.toggleTextActive
-                    ]}>
-                        Anual
-                    </Text>
-                    {billingCycle === 'annually' && (
-                        <View style={styles.savingsBadge}>
-                            <Text style={styles.savingsBadgeText}>-15%</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-            </Animated.View>
-            
-            {billingCycle === 'annually' && (
-                <Animated.View 
-                    style={styles.savingsInfo}
-                    entering="fadeInUp"
-                >
-                    <Feather name="trending-down" size={16} color="#10B981" />
-                    <Text style={styles.savingsText}>
-                        Ahorra hasta $1,300 al año
-                    </Text>
-                </Animated.View>
-            )}
-        </View>
-    );
-};
-
-const FeatureItem = ({ feature, isHighlighted, delay = 0 }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(20)).current;
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                }),
-                Animated.spring(slideAnim, {
-                    toValue: 0,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }, delay);
-
-        return () => clearTimeout(timer);
-    }, [delay, fadeAnim, slideAnim]);
-
-    return (
-        <Animated.View
-            style={[
-                styles.featureItem,
-                {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }]
-                }
-            ]}
-        >
-            <View style={[
-                styles.featureIcon,
-                { backgroundColor: isHighlighted ? 'rgba(18, 18, 18, 0.15)' : 'rgba(16, 185, 129, 0.15)' }
-            ]}>
-                <Feather 
-                    name={feature.icon} 
-                    size={14} 
-                    color={isHighlighted ? '#121212' : '#10B981'} 
-                />
-            </View>
-            <Text style={[
-                styles.featureText,
-                isHighlighted && styles.featureTextHighlighted
-            ]}>
-                {feature.text}
-            </Text>
-        </Animated.View>
-    );
-};
-
+// --- COMPONENTE: TARJETA DE PLAN ---
 const PlanCard = ({ plan, billingCycle, onSelect, index }) => {
-    const scaleAnim = useRef(new Animated.Value(0.85)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const [isPressed, setIsPressed] = useState(false);
+    const scaleAnim = useRef(new Animated.Value(0.95)).current;
     
-    // --- CORRECCIÓN DE LÓGICA DE PRECIOS ---
+    // 1. Determinar precio según el ciclo
+    const price = billingCycle === 'annually' ? plan.price_annually : plan.price_monthly;
     
-    // 1. Obtenemos el precio real a pagar según el ciclo
-    const currentPrice = billingCycle === 'annually' ? plan.price_annually : plan.price_monthly;
-    
-    // 2. Calculamos el "precio original" (anchor) para mostrar el ahorro.
-    //    Si es anual, el precio original es (precio mensual * 12).
-    const originalPrice = billingCycle === 'annually' ? (plan.price_monthly * 12) : null;
-    
-    // 3. Calculamos cuánto se muestra por mes (para marketing)
-    const pricePerMonth = billingCycle === 'annually' ? Math.round(currentPrice / 12) : currentPrice;
-    
-    // 4. Calculamos el porcentaje de descuento real
-    const discount = (billingCycle === 'annually' && originalPrice > 0) 
-        ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100) 
+    // 2. Calcular precio mensual equivalente (para mostrar "X al mes")
+    const displayMonthlyPrice = billingCycle === 'annually' ? (price / 12) : price;
+
+    // 3. Calcular ahorro si es anual (comparado con pagar mensual x 12)
+    const yearlyCostIfMonthly = plan.price_monthly * 12;
+    const savingPercent = billingCycle === 'annually' 
+        ? Math.round(((yearlyCostIfMonthly - plan.price_annually) / yearlyCostIfMonthly) * 100) 
         : 0;
 
-    // 5. Definimos colores por defecto si el backend no los manda
-    const defaultGradient = plan.isHighlighted 
-        ? ['#252525', '#151515'] 
-        : ['#1E1E1E', '#121212'];
+    // 4. Colores dinámicos según el plan (puedes ajustarlos o traerlos del backend si los agregas)
+    const getGradient = (name) => {
+        if (name.includes('Manager')) return ['#10B981', '#059669']; // Verde
+        if (name.includes('Factura')) return ['#6366F1', '#4F46E5']; // Azul/Indigo
+        if (name.includes('Completo')) return ['#FDB813', '#F59E0B']; // Gold (Destacado)
+        return ['#333', '#111']; // Default
+    };
 
-    // --- FIN DE CORRECCIONES ---
+    const gradientColors = getGradient(plan.name);
+    const isHighlighted = plan.isHighlighted || plan.name.includes('Completo');
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.parallel([
-                Animated.spring(scaleAnim, {
-                    toValue: 1,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }, index * 150);
-
-        return () => clearTimeout(timer);
-    }, [index, scaleAnim, fadeAnim]);
-
-    const handlePressIn = () => {
-        setIsPressed(true);
-        Animated.spring(scaleAnim, {
-            toValue: 0.95,
-            tension: 200,
-            friction: 8,
-            useNativeDriver: true,
-        }).start();
-    };
-
-    const handlePressOut = () => {
-        setIsPressed(false);
         Animated.spring(scaleAnim, {
             toValue: 1,
-            tension: 200,
-            friction: 8,
+            tension: 50,
+            friction: 7,
             useNativeDriver: true,
+            delay: index * 100
         }).start();
-    };
+    }, []);
 
-    const handleSelect = () => {
-        if (Platform.OS === 'ios') {
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
-        // Pasamos el objeto plan original, la pantalla padre se encargará de formatearlo
+    const handlePress = () => {
+        Haptics.selectionAsync();
         onSelect(plan);
     };
 
     return (
-        <Animated.View
-            style={[
-                styles.cardContainer,
-                {
-                    transform: [{ scale: scaleAnim }],
-                    opacity: fadeAnim,
-                }
-            ]}
-        >
-            <TouchableOpacity
-                activeOpacity={1}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-                style={styles.cardTouchable}
+        <Animated.View style={[styles.cardContainer, { transform: [{ scale: scaleAnim }] }]}>
+            <TouchableOpacity 
+                activeOpacity={0.9} 
+                onPress={handlePress}
+                style={[styles.cardTouchable, isHighlighted && styles.highlightedBorder]}
             >
                 <LinearGradient
-                    // Usamos el gradiente del plan si existe, si no, uno por defecto
-                    colors={plan.gradient || defaultGradient}
-                    style={[
-                        styles.planCard,
-                        plan.isHighlighted && styles.highlightedCard
-                    ]}
+                    colors={gradientColors}
+                    style={styles.cardGradient}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                 >
-                    {/* Header con badge y descuento */}
+                    {/* Header: Nombre y Badge */}
                     <View style={styles.cardHeader}>
-                        {/* Usamos 'tagline' del backend como badge */}
-                        {plan.tagline && (
-                            <View style={[styles.popularBadge, plan.isHighlighted ? { backgroundColor: '#FDB813' } : { backgroundColor: '#333' }]}>
-                                <Feather name={plan.isHighlighted ? "star" : "tag"} size={12} color={plan.isHighlighted ? "#121212" : "#FFF"} />
-                                <Text style={[styles.popularBadgeText, plan.isHighlighted ? { color: '#121212' } : { color: '#FFF' }]}>
-                                    {plan.tagline}
-                                </Text>
-                            </View>
-                        )}
-                        
-                        {discount > 0 && billingCycle === 'annually' && (
-                            <View style={styles.discountBadge}>
-                                <Text style={styles.discountText}>-{discount}%</Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Información del plan */}
-                    <View style={styles.planInfo}>
-                        <Text style={[
-                            styles.planName,
-                            plan.isHighlighted && styles.planNameHighlighted
-                        ]}>
-                            {plan.name}
-                        </Text>
-                        <Text style={[
-                            styles.planDescription,
-                            plan.isHighlighted && styles.planDescriptionHighlighted
-                        ]} numberOfLines={2}>
-                            {plan.description || "La mejor opción para tu negocio."}
-                        </Text>
-                    </View>
-
-                    {/* Precios */}
-                    <View style={styles.pricingSection}>
-                        <View style={styles.priceContainer}>
-                            <Text style={[
-                                styles.currency,
-                                plan.isHighlighted && styles.currencyHighlighted
-                            ]}>
-                                $
-                            </Text>
-                            <Text style={[
-                                styles.priceAmount,
-                                plan.isHighlighted && styles.priceAmountHighlighted
-                            ]}>
-                                {pricePerMonth.toLocaleString()}
-                            </Text>
-                            <Text style={[
-                                styles.pricePeriod,
-                                plan.isHighlighted && styles.pricePeriodHighlighted
-                            ]}>
-                                /mes
-                            </Text>
+                        <View>
+                            <Text style={styles.planName}>{plan.name}</Text>
+                            <Text style={styles.planTagline}>{plan.tagline}</Text>
                         </View>
-                        
-                        {billingCycle === 'annually' && (
-                            <View style={styles.billingDetails}>
-                                <Text style={[
-                                    styles.billingNotice,
-                                    plan.isHighlighted && styles.billingNoticeHighlighted
-                                ]}>
-                                    Facturado anualmente: ${currentPrice.toLocaleString()}
-                                </Text>
-                                {/* Mostramos el precio "tachado" si existe ahorro */}
-                                {originalPrice > currentPrice && (
-                                    <Text style={styles.originalPrice}>
-                                        Antes: ${originalPrice.toLocaleString()}
-                                    </Text>
-                                )}
+                        {isHighlighted && (
+                            <View style={styles.popularBadge}>
+                                <Feather name="star" size={12} color="#000" />
+                                <Text style={styles.popularText}>POPULAR</Text>
                             </View>
                         )}
                     </View>
 
-                    {/* Features */}
-                    <View style={styles.featuresSection}>
-                        <Text style={[
-                            styles.featuresTitle,
-                            plan.isHighlighted && styles.featuresTitleHighlighted
-                        ]}>
-                            Incluye:
-                        </Text>
-                        
-                        <View style={styles.featuresList}>
-                            {/* 1. Mostramos los timbres primero */}
-                            <View style={styles.featureRow}>
-                                <MaterialCommunityIcons name="ticket-confirmation" size={20} color="#10B981" />
-                                <Text style={styles.featureText}>
-                                    {plan.timbres > 0 ? `${plan.timbres} Timbres` : 'Sin timbres incluidos'}
-                                </Text>
-                            </View>
-
-                            {/* 2. Iteramos sobre el array de features (con seguridad) */}
-                            {Array.isArray(plan.features) && plan.features.map((feature, index) => (
-                                <View key={index} style={styles.featureRow}>
-                                    <Feather name="check" size={18} color="#FDB813" />
-                                    {/* Manejamos si feature es objeto o string */}
-                                    <Text style={styles.featureText}>
-                                        {typeof feature === 'string' ? feature : feature.text}
-                                    </Text>
+                    {/* Precio */}
+                    <View style={styles.priceContainer}>
+                        <Text style={styles.currency}>$</Text>
+                        <Text style={styles.price}>{displayMonthlyPrice.toFixed(0)}</Text>
+                        <Text style={styles.period}>/mes</Text>
+                    </View>
+                    
+                    {billingCycle === 'annually' && (
+                        <View style={styles.billingInfoContainer}>
+                            <Text style={styles.billingInfoText}>
+                                Facturado ${price.toLocaleString()} al año
+                            </Text>
+                            {savingPercent > 0 && (
+                                <View style={styles.savingBadge}>
+                                    <Text style={styles.savingText}>Ahorra {savingPercent}%</Text>
                                 </View>
-                            ))}
+                            )}
                         </View>
+                    )}
+
+                    {/* Lista de Features */}
+                    <View style={styles.featuresContainer}>
+                        {/* Timbres (Feature especial) */}
+                        <View style={styles.featureRow}>
+                            <MaterialCommunityIcons name="ticket-confirmation" size={20} color="rgba(255,255,255,0.9)" />
+                            <Text style={styles.featureText}>
+                                {plan.timbres > 0 ? `${plan.timbres} Timbres incluidos` : 'Sin facturación'}
+                            </Text>
+                        </View>
+
+                        {/* Features dinámicos del JSON */}
+                        {plan.features && plan.features.map((feature, i) => (
+                            <View key={i} style={styles.featureRow}>
+                                <Feather name="check" size={18} color="rgba(255,255,255,0.9)" />
+                                <Text style={styles.featureText}>
+                                    {typeof feature === 'string' ? feature : feature.text}
+                                </Text>
+                            </View>
+                        ))}
                     </View>
 
-                    {/* CTA Button */}
-                    <TouchableOpacity 
-                        style={[
-                            styles.selectButton, 
-                            plan.isHighlighted ? styles.buttonHighlighted : styles.buttonDefault
-                        ]}
-                        onPress={handleSelect}
-                        activeOpacity={0.8}
-                    >
-                        <LinearGradient
-                            colors={plan.isHighlighted 
-                                ? ['#FDB813', '#F59E0B'] 
-                                : ['#333', '#222']
-                            }
-                            style={styles.selectButtonGradient}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                        >
-                            <Text style={[
-                                styles.buttonText, 
-                                plan.isHighlighted && styles.textHighlighted
-                            ]}>
-                                Elegir Plan
-                            </Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                    {/* Botón CTA */}
+                    <View style={styles.ctaButton}>
+                        <Text style={[styles.ctaText, { color: gradientColors[1] }]}>
+                            Seleccionar Plan
+                        </Text>
+                    </View>
+
                 </LinearGradient>
             </TouchableOpacity>
         </Animated.View>
     );
 };
 
-const PlanComparison = ({ plans, billingCycle }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    
-    useEffect(() => {
-        Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 500,
-            delay: 300,
-            useNativeDriver: true,
-        }).start();
-    }, [fadeAnim]);
-
-    const allFeatures = [...new Set(plans.flatMap(plan => 
-        plan.features.map(f => f.text)
-    ))];
-
-    return (
-        <Animated.View style={[styles.comparisonSection, { opacity: fadeAnim }]}>
-            <View style={styles.comparisonHeader}>
-                <Text style={styles.comparisonTitle}>Comparación Detallada</Text>
-                <Text style={styles.comparisonSubtitle}>
-                    Ve las diferencias entre cada plan
-                </Text>
-            </View>
-            
-            <View style={styles.comparisonTable}>
-                <View style={styles.comparisonHeaderRow}>
-                    <Text style={styles.comparisonHeaderText}>Característica</Text>
-                    {plans.map(plan => (
-                        <View key={plan.id} style={styles.comparisonPlanHeader}>
-                            <Text style={styles.comparisonPlanName}>
-                                {plan.tagline}
-                            </Text>
-                        </View>
-                    ))}
-                </View>
-                
-                {allFeatures.slice(0, 7).map((feature, index) => (
-                    <View key={index} style={[
-                        styles.comparisonRow,
-                        index % 2 === 0 && styles.comparisonRowEven
-                    ]}>
-                        <Text style={styles.comparisonFeature}>{feature}</Text>
-                        {plans.map(plan => (
-                            <View key={plan.id} style={styles.comparisonCell}>
-                                <View style={[
-                                    styles.checkIconContainer,
-                                    plan.features.some(f => f.text === feature) && styles.checkIconContainerActive
-                                ]}>
-                                    <Feather 
-                                        name={plan.features.some(f => f.text === feature) ? "check" : "x"} 
-                                        size={16} 
-                                        color={plan.features.some(f => f.text === feature) ? "#10B981" : "#FF6B6B"} 
-                                    />
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-                ))}
-            </View>
-        </Animated.View>
-    );
-};
-
-// --- COMPONENTE PRINCIPAL ---
-const PlanSelectionScreen = () => {
-    const navigation = useNavigation();
-    const [billingCycle, setBillingCycle] = useState('annually');
-    const [showComparison, setShowComparison] = useState(false);
-    const flatListRef = useRef(null);
-    const [plans, setPlans] = useState([]); // Para guardar los planes de la API
-    const [isLoading, setIsLoading] = useState(true);
+// --- PANTALLA PRINCIPAL ---
+const PlanSelectionScreen = ({ navigation }) => {
+    const [plans, setPlans] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [billingCycle, setBillingCycle] = useState('monthly'); // 'monthly' | 'annually'
     const [error, setError] = useState(null);
-    const scrollX = useRef(new Animated.Value(0)).current;
-    
-    // Animaciones
-    const headerFadeAnim = useRef(new Animated.Value(0)).current;
-    const headerSlideAnim = useRef(new Animated.Value(-50)).current;
 
+    // Cargar planes al montar
     useEffect(() => {
-        // 1. Animación de entrada (tu código actual)
-        Animated.parallel([
-            Animated.timing(headerFadeAnim, {
-                toValue: 1,
-                duration: 800,
-                useNativeDriver: true,
-            }),
-            Animated.spring(headerSlideAnim, {
-                toValue: 0,
-                tension: 50,
-                friction: 8,
-                useNativeDriver: true,
-            }),
-        ]).start();
+        fetchPlans();
+    }, []);
 
-        // 2. Función para cargar los planes desde la API
-        const fetchPlans = async () => {
-            try {
-                setIsLoading(true);
-                setError(null);
-                const plansData = await getAvailablePlans();
-                setPlans(plansData); // Guarda los planes en el estado
-            } catch (err) {
-                console.error("Error al cargar planes:", err);
-                setError(err.message);
-            } finally {
-                setIsLoading(false);
+    const fetchPlans = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            // Usamos el endpoint que ya existe en api.js o llamamos directo
+            const response = await api.get('/payments/plans');
+            
+            if (response.data.success) {
+                // Ordenamos: primero los destacados, luego por precio
+                const sortedPlans = response.data.plans.sort((a, b) => a.price_monthly - b.price_monthly);
+                setPlans(sortedPlans);
+            } else {
+                throw new Error('Formato de respuesta inválido');
             }
+        } catch (err) {
+            console.error('[PlansScreen] Error:', err);
+            setError('No pudimos cargar los planes. Revisa tu conexión.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSelectPlan = (plan) => {
+        // Preparamos el objeto para la siguiente pantalla (Checkout)
+        const selectedData = {
+            planId: plan.id,
+            name: plan.name,
+            price: billingCycle === 'annually' ? plan.price_annually : plan.price_monthly,
+            period: billingCycle, // 'monthly' o 'annually'
+            features: plan.features,
+            timbres: plan.timbres
         };
 
-        // 3. Llama a la función
-        fetchPlans();
-
-    }, []); // El array vacío asegura que todo esto se ejecute solo una vez
-
-    const handlePlanSelect = (plan) => {
-    // Construimos un objeto limpio con los datos exactos que necesitamos
-    const selectedData = {
-        name: plan.name,
-        price: billingCycle === 'annually' ? plan.price_annually : plan.price_monthly,
-        period: billingCycle,
-        planId: plan.id, // El ID real del plan de la base de datos
-        features: plan.features
+        // Navegar al Checkout (PaymentGatewayScreen)
+        navigation.navigate('Payment', { selectedPlan: selectedData });
     };
-    // Pasamos este nuevo objeto a la siguiente pantalla
-    navigation.navigate('Payment', { selectedPlan: selectedData });
-};
 
-    const renderPlanCard = ({ item, index }) => (
-        <PlanCard
-            plan={item}
-            billingCycle={billingCycle}
-            onSelect={handlePlanSelect}
-            index={index}
-        />
-    );
+    // --- RENDERIZADO DE CARGA ---
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <StatusBar barStyle="light-content" backgroundColor="#000" />
+                <ActivityIndicator size="large" color="#FDB813" />
+                <Text style={styles.loadingText}>Cargando planes...</Text>
+            </View>
+        );
+    }
 
-    const handleScroll = Animated.event(
-        [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-        { useNativeDriver: false }
-    );
-
+    // --- RENDERIZADO PRINCIPAL ---
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#121212" />
-            
-            <LinearGradient
-                colors={['#1a1a1a', '#121212', '#0f0f0f']}
-                locations={[0, 0.7, 1]}
-                style={styles.gradient}
-            >
-                {/* Header */}
-                <Animated.View 
-                    style={[
-                        styles.header,
-                        {
-                            opacity: headerFadeAnim,
-                            transform: [{ translateY: headerSlideAnim }]
-                        }
-                    ]}
-                >
+            <StatusBar barStyle="light-content" backgroundColor="#000" />
+            <LinearGradient colors={['#000000', '#121212']} style={styles.background} />
+
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <Feather name="arrow-left" size={24} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Elige tu Plan</Text>
+                <Text style={styles.headerSubtitle}>
+                    Potencia tu restaurante con las herramientas adecuadas.
+                </Text>
+            </View>
+
+            {/* Selector de Ciclo (Mensual/Anual) */}
+            <View style={styles.toggleContainer}>
+                <View style={styles.toggleWrapper}>
                     <TouchableOpacity 
-                        style={styles.backButton} 
-                        onPress={() => navigation.goBack()}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={[styles.toggleOption, billingCycle === 'monthly' && styles.toggleActive]}
+                        onPress={() => { Haptics.selectionAsync(); setBillingCycle('monthly'); }}
                     >
-                        <Feather name="arrow-left" size={24} color="#FDB813" />
+                        <Text style={[styles.toggleText, billingCycle === 'monthly' && styles.toggleTextActive]}>Mensual</Text>
                     </TouchableOpacity>
                     
-                    <View style={styles.headerContent}>
-                        <Text style={styles.title}>Planes y Precios</Text>
-                        <Text style={styles.subtitle}>
-                            Elige la solución perfecta para tu negocio
-                        </Text>
-                    </View>
-                </Animated.View>
+                    <TouchableOpacity 
+                        style={[styles.toggleOption, billingCycle === 'annually' && styles.toggleActive]}
+                        onPress={() => { Haptics.selectionAsync(); setBillingCycle('annually'); }}
+                    >
+                        <Text style={[styles.toggleText, billingCycle === 'annually' && styles.toggleTextActive]}>Anual</Text>
+                        {/* Badge de Ahorro en el Toggle */}
+                        <View style={styles.toggleBadge}>
+                            <Text style={styles.toggleBadgeText}>-15%</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </View>
 
-                {/* Billing Toggle */}
-                <AnimatedBillingToggle 
-                    billingCycle={billingCycle} 
-                    setBillingCycle={setBillingCycle} 
-                />
-
-
-{isLoading && (
-    <View style={styles.centeredContainer}>
-        <ActivityIndicator size="large" color="#FDB813" />
-        <Text style={styles.loadingText}>Cargando planes...</Text>
-    </View>
-)}
-
-{error && (
-    <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>Error: {error}</Text>
-        {/* Opcional: Añadir un botón para reintentar */}
-    </View>
-)}
-
-{!isLoading && !error && (
-    <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-        scrollEventThrottle={16}
-    >
-        {/* Plans Carousel */}
-        <View style={styles.carouselSection}>
-           <FlatList
-    ref={flatListRef}
-    data={plans}
-    renderItem={renderPlanCard}
-    keyExtractor={item => item.id}
-    horizontal
-    pagingEnabled
-    showsHorizontalScrollIndicator={false}
-    
-    // Configuración de snapping
-    snapToInterval={CARD_WIDTH + 20} // CARD_WIDTH + marginRight
-    decelerationRate="fast"
-    
-    contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
-    onScroll={handleScroll}
-    scrollEventThrottle={16}
-    
-    // --- CORRECCIÓN 1: Centrado Inicial ---
-    // Si tienes 3 planes, el índice 1 es el del medio.
-    initialScrollIndex={plans.length > 1 ? 1 : 0} 
-    
-    // --- CORRECCIÓN 2: Cálculo de Layout (La Solución al Error) ---
-    // Esto le dice a RN cuánto mide cada item antes de renderizarlo.
-    // length: Ancho de la tarjeta + margen derecho (20)
-    // offset: (Ancho + margen) * índice
-    getItemLayout={(data, index) => ({
-        length: CARD_WIDTH + 20,
-        offset: (CARD_WIDTH + 20) * index,
-        index,
-    })}
-
-    // --- CORRECCIÓN 3: Fallback de Seguridad ---
-    // Si por alguna razón falla el cálculo, esto evita que la app crashee
-    // e intenta scrollear un poco después.
-    onScrollToIndexFailed={(info) => {
-        const wait = new Promise(resolve => setTimeout(resolve, 500));
-        wait.then(() => {
-            flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
-        });
-    }}
-/>
-            
-            {/* Dots Indicator */}
-            <View style={styles.dotsContainer}>
-                {plans.map((_, index) => {
-                    const inputRange = [
-                        (index - 1) * (CARD_WIDTH + CARD_SPACING),
-                        index * (CARD_WIDTH + CARD_SPACING),
-                        (index + 1) * (CARD_WIDTH + CARD_SPACING),
-                    ];
-                    
-                    const dotOpacity = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.3, 1, 0.3],
-                        extrapolate: 'clamp',
-                    });
-                    
-                    const dotScale = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.8, 1.3, 0.8],
-                        extrapolate: 'clamp',
-                    });
-
-                    return (
-                        <Animated.View
-                            key={index}
-                            style={[
-                                styles.dot,
-                                {
-                                    opacity: dotOpacity,
-                                    transform: [{ scale: dotScale }]
-                                }
-                            ]}
+            {/* Lista de Planes (Scroll Horizontal) */}
+            {error ? (
+                <View style={styles.errorContainer}>
+                    <Feather name="wifi-off" size={48} color="#666" />
+                    <Text style={styles.errorText}>{error}</Text>
+                    <TouchableOpacity style={styles.retryButton} onPress={fetchPlans}>
+                        <Text style={styles.retryText}>Reintentar</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <ScrollView 
+                    contentContainerStyle={styles.scrollContent}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Renderizamos las tarjetas en vertical para móviles, es mejor UX que horizontal si son pocas */}
+                    {plans.map((plan, index) => (
+                        <PlanCard 
+                            key={plan.id} 
+                            plan={plan} 
+                            billingCycle={billingCycle} 
+                            onSelect={handleSelectPlan}
+                            index={index}
                         />
-                    );
-                })}
-            </View>
-        </View>
-
-        {/* Comparison Toggle */}
-        <TouchableOpacity
-            style={styles.comparisonToggle}
-            onPress={() => setShowComparison(!showComparison)}
-            activeOpacity={0.8}
-        >
-            <Text style={styles.comparisonToggleText}>
-                {showComparison ? 'Ocultar' : 'Ver'} comparación detallada
-            </Text>
-            <Animated.View
-                style={{
-                    transform: [{
-                        rotate: showComparison ? '180deg' : '0deg'
-                    }]
-                }}
-            >
-                <Feather name="chevron-down" size={20} color="#FDB813" />
-            </Animated.View>
-        </TouchableOpacity>
-
-        {/* Detailed Comparison */}
-        {showComparison && (
-            <PlanComparison 
-                plans={plans} 
-                billingCycle={billingCycle} 
-            />
-        )}
-
-        {/* Help Section */}
-        <View style={styles.helpSection}>
-            <View style={styles.helpHeader}>
-                <Feather name="help-circle" size={24} color="#FDB813" />
-                <Text style={styles.helpTitle}>¿Necesitas ayuda para decidir?</Text>
-            </View>
-            <Text style={styles.helpText}>
-                Nuestro equipo está aquí para ayudarte a encontrar el plan perfecto para tu negocio
-            </Text>
-            
-            <View style={styles.helpButtons}>
-                <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
-                    <LinearGradient
-                        colors={['rgba(253, 184, 19, 0.1)', 'rgba(253, 184, 19, 0.05)']}
-                        style={styles.helpButtonGradient}
-                    >
-                        <Feather name="message-circle" size={20} color="#FDB813" />
-                        <Text style={styles.helpButtonText}>Chat en vivo</Text>
-                    </LinearGradient>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.helpButton} activeOpacity={0.8}>
-                    <LinearGradient
-                        colors={['rgba(253, 184, 19, 0.1)', 'rgba(253, 184, 19, 0.05)']}
-                        style={styles.helpButtonGradient}
-                    >
-                        <Feather name="phone" size={20} color="#FDB813" />
-                        <Text style={styles.helpButtonText}>Llamar ahora</Text>
-                    </LinearGradient>
-                </TouchableOpacity>
-            </View>
-        </View>
-
-        <View style={styles.bottomSpacing} />
-    </ScrollView>
-)}
-            </LinearGradient>
+                    ))}
+                    
+                    <View style={styles.footerNote}>
+                        <Feather name="lock" size={14} color="#666" />
+                        <Text style={styles.footerText}>Pagos seguros procesados por MercadoPago</Text>
+                    </View>
+                </ScrollView>
+            )}
         </SafeAreaView>
     );
 };
@@ -785,599 +283,269 @@ const PlanSelectionScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#121212',
+        backgroundColor: '#000',
     },
-    gradient: {
+    background: {
+        ...StyleSheet.absoluteFillObject,
+    },
+    loadingContainer: {
         flex: 1,
-    },
-    header: {
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
-        paddingBottom: 20,
-        paddingHorizontal: 24,
-        position: 'relative',
-    },
-    backButton: {
-        position: 'absolute',
-        top: Platform.OS === 'android' ? StatusBar.currentHeight + 25 : 65,
-        left: 24,
-        zIndex: 10,
-        padding: 12,
-        borderRadius: 24,
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        borderWidth: 1,
-        borderColor: 'rgba(253, 184, 19, 0.2)',
-    },
-    headerContent: {
-        alignItems: 'center',
-        marginTop: 40,
-    },
-    title: {
-        fontSize: 32,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        textAlign: 'center',
-        marginBottom: 8,
-        letterSpacing: -0.5,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#A0A0A0',
-        textAlign: 'center',
-        paddingHorizontal: 20,
-        lineHeight: 24,
-    },
-    
-    // Toggle Styles
-    toggleWrapper: {
-        alignItems: 'center',
-        paddingVertical: 24,
-        paddingHorizontal: 20,
-    },
-    toggleContainer: {
-        width: 220,
-        height: 48,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        borderRadius: 24,
-        padding: 3,
-        flexDirection: 'row',
-        position: 'relative',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.12)',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    toggleKnob: {
-        position: 'absolute',
-        top: 3,
-        height: 42,
-        backgroundColor: '#FDB813',
-        borderRadius: 21,
-        shadowColor: '#FDB813',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    toggleOption: {
+        backgroundColor: '#000',
         justifyContent: 'center',
         alignItems: 'center',
-        height: 42,
-        borderRadius: 21,
-        position: 'relative',
-        flex: 1,
     },
-    toggleText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: 'rgba(255, 255, 255, 0.6)',
+    loadingText: {
+        color: '#888',
+        marginTop: 10,
     },
-    toggleTextActive: {
-        color: '#121212',
+    
+    // Header
+    header: {
+        paddingHorizontal: 24,
+        paddingTop: 10,
+        paddingBottom: 20,
+    },
+    backButton: {
+        marginBottom: 16,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    headerTitle: {
+        fontSize: 32,
         fontWeight: 'bold',
+        color: '#FFF',
+        marginBottom: 8,
     },
-    savingsBadge: {
-        position: 'absolute',
-        top: -8,
-        right: -4,
-        backgroundColor: '#10B981',
-        borderRadius: 10,
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        shadowColor: '#10B981',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-        elevation: 5,
+    headerSubtitle: {
+        fontSize: 16,
+        color: '#A0A0A0',
+        lineHeight: 24,
     },
-    savingsBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 11,
-        fontWeight: 'bold',
+
+    // Toggle
+    toggleContainer: {
+        alignItems: 'center',
+        marginBottom: 24,
     },
-    savingsInfo: {
+    toggleWrapper: {
+        flexDirection: 'row',
+        backgroundColor: '#1A1A1A',
+        borderRadius: 30,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    toggleOption: {
+        paddingVertical: 10,
+        paddingHorizontal: 32,
+        borderRadius: 26,
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 16,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        borderRadius: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.2)',
     },
-    savingsText: {
-        color: '#10B981',
-        fontSize: 14,
+    toggleActive: {
+        backgroundColor: '#333',
+    },
+    toggleText: {
+        color: '#888',
         fontWeight: '600',
+        fontSize: 14,
+    },
+    toggleTextActive: {
+        color: '#FFF',
+    },
+    toggleBadge: {
+        backgroundColor: '#10B981',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 8,
         marginLeft: 8,
     },
-    
-    // Scroll and Carousel Styles
-    scrollView: {
-        flex: 1,
+    toggleBadgeText: {
+        color: '#000',
+        fontSize: 10,
+        fontWeight: 'bold',
     },
-    carouselSection: {
-        paddingVertical: 20,
+
+    // Scroll
+    scrollContent: {
+        paddingHorizontal: 24,
+        paddingBottom: 40,
+        alignItems: 'center', // Centrar tarjetas
     },
-    carouselContent: {
-        paddingHorizontal: 20,
-    },
-    
-    // Card Styles
+
+    // Tarjetas
     cardContainer: {
-        width: CARD_WIDTH,
-        marginHorizontal: CARD_SPACING / 2,
+        width: '100%',
+        marginBottom: 24,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
+        elevation: 10,
     },
     cardTouchable: {
         borderRadius: 24,
-    },
-    planCard: {
-        borderRadius: 24,
-        padding: 24,
-        marginVertical: 8,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 8,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 16,
+        overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: 'rgba(255,255,255,0.1)',
     },
-    highlightedCard: {
-        borderColor: 'rgba(253, 184, 19, 0.3)',
-        shadowColor: '#FDB813',
-        shadowOpacity: 0.4,
-        transform: [{ scale: 1.02 }],
+    highlightedBorder: {
+        borderColor: '#FDB813',
+        borderWidth: 2,
     },
+    cardGradient: {
+        padding: 24,
+        minHeight: 200,
+    },
+    
+    // Contenido Tarjeta
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         marginBottom: 20,
-        minHeight: 32,
-    },
-    popularBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(18, 18, 18, 0.15)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(18, 18, 18, 0.2)',
-    },
-    popularBadgeText: {
-        color: '#121212',
-        fontSize: 11,
-        fontWeight: 'bold',
-        marginLeft: 4,
-        letterSpacing: 0.5,
-    },
-    discountBadge: {
-        backgroundColor: '#FF6B6B',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
-        shadowColor: '#FF6B6B',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    discountText: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    
-    // Plan Info Styles
-    planInfo: {
-        marginBottom: 24,
-    },
-    planTagline: {
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontWeight: '500',
-        marginBottom: 4,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
     },
     planName: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: '#FFFFFF',
-        marginBottom: 12,
-        letterSpacing: -0.5,
+        color: '#FFF',
+        marginBottom: 4,
     },
-    planNameHighlighted: {
-        color: '#121212',
+    planTagline: {
+        fontSize: 14,
+        color: 'rgba(255,255,255,0.8)',
     },
-    planDescription: {
-        fontSize: 15,
-        color: 'rgba(255, 255, 255, 0.8)',
-        lineHeight: 22,
-    },
-    planDescriptionHighlighted: {
-        color: 'rgba(18, 18, 18, 0.8)',
-    },
-    
-    // Pricing Styles
-    pricingSection: {
-        marginBottom: 28,
+    popularBadge: {
+        flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: '#FDB813',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        gap: 4,
     },
+    popularText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: '#000',
+    },
+
     priceContainer: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        justifyContent: 'center',
         marginBottom: 8,
     },
     currency: {
         fontSize: 20,
         fontWeight: '600',
-        color: '#FFFFFF',
+        color: '#FFF',
+        marginRight: 4,
     },
-    currencyHighlighted: {
-        color: '#121212',
-    },
-    priceAmount: {
-        fontSize: 42,
+    price: {
+        fontSize: 48,
         fontWeight: 'bold',
-        color: '#FFFFFF',
+        color: '#FFF',
         letterSpacing: -1,
     },
-    priceAmountHighlighted: {
-        color: '#121212',
-    },
-    pricePeriod: {
-        fontSize: 18,
-        fontWeight: '500',
-        color: 'rgba(255, 255, 255, 0.8)',
+    period: {
+        fontSize: 16,
+        color: 'rgba(255,255,255,0.7)',
         marginLeft: 4,
     },
-    pricePeriodHighlighted: {
-        color: 'rgba(18, 18, 18, 0.8)',
-    },
-    billingInfo: {
+
+    billingInfoContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
+        marginBottom: 20,
+        gap: 10,
     },
-    billingNotice: {
+    billingInfoText: {
+        color: 'rgba(255,255,255,0.7)',
         fontSize: 13,
-        color: 'rgba(255, 255, 255, 0.7)',
-        marginBottom: 4,
     },
-    billingNoticeHighlighted: {
-        color: 'rgba(18, 18, 18, 0.7)',
-    },
-    originalPrice: {
-        fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.5)',
-        textDecorationLine: 'line-through',
-    },
-    originalPriceHighlighted: {
-        color: 'rgba(18, 18, 18, 0.5)',
-    },
-    
-    // Features Styles
-    featuresSection: {
-        marginBottom: 24,
-    },
-    featuresTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FFFFFF',
-        marginBottom: 16,
-    },
-    featuresTitleHighlighted: {
-        color: '#121212',
-    },
-    featuresList: {
-        marginBottom: 16,
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    featureIcon: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    featureText: {
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.9)',
-        flex: 1,
-        fontWeight: '500',
-    },
-    featureTextHighlighted: {
-        color: 'rgba(18, 18, 18, 0.9)',
-    },
-    
-    // Limitations Styles
-    limitationsSection: {
-        marginTop: 8,
-        paddingTop: 16,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    limitationsTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 12,
-    },
-    limitationsTitleHighlighted: {
-        color: 'rgba(18, 18, 18, 0.8)',
-    },
-    limitationItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-    },
-    limitationText: {
-        fontSize: 13,
-        color: 'rgba(255, 255, 255, 0.6)',
-        marginLeft: 8,
-        fontStyle: 'italic',
-    },
-    limitationTextHighlighted: {
-        color: 'rgba(18, 18, 18, 0.6)',
-    },
-    
-    // Button Styles
-    selectButton: {
-        borderRadius: 16,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    selectButtonHighlighted: {
-        shadowColor: '#121212',
-    },
-    selectButtonGradient: {
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    selectButtonText: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        marginRight: 8,
-    },
-    selectButtonTextHighlighted: {
-        color: '#FFFFFF',
-    },
-    
-    // Dots Indicator
-    dotsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 24,
-        marginBottom: 8,
-    },
-    dot: {
-        width: 8,
-        height: 8,
+    savingBadge: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
         borderRadius: 4,
-        backgroundColor: '#FDB813',
-        marginHorizontal: 6,
     },
-    
-    // Comparison Styles
-    comparisonToggle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 16,
-        paddingHorizontal: 24,
-        marginHorizontal: 20,
-        marginVertical: 16,
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(253, 184, 19, 0.2)',
+    savingText: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: 'bold',
     },
-    comparisonToggleText: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#FDB813',
-        marginRight: 8,
-    },
-    comparisonSection: {
-        marginHorizontal: 20,
-        marginBottom: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
-        padding: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    comparisonHeader: {
+
+    // Features
+    featuresContainer: {
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(255,255,255,0.2)',
+        paddingTop: 20,
         marginBottom: 20,
-        alignItems: 'center',
-    },
-    comparisonTitle: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        marginBottom: 8,
-        textAlign: 'center',
-    },
-    comparisonSubtitle: {
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.7)',
-        textAlign: 'center',
-    },
-    comparisonTable: {
-        backgroundColor: 'rgba(0, 0, 0, 0.2)',
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    comparisonHeaderRow: {
-        flexDirection: 'row',
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        alignItems: 'center',
-    },
-    comparisonHeaderText: {
-        flex: 2,
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#FDB813',
-    },
-    comparisonPlanHeader: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    comparisonPlanName: {
-        fontSize: 12,
-        fontWeight: 'bold',
-        color: '#FDB813',
-        textAlign: 'center',
-    },
-    comparisonRow: {
-        flexDirection: 'row',
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    comparisonRowEven: {
-        backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    },
-    comparisonFeature: {
-        flex: 2,
-        fontSize: 14,
-        color: 'rgba(255, 255, 255, 0.9)',
-        fontWeight: '500',
-    },
-    comparisonCell: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    checkIconContainer: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    checkIconContainerActive: {
-        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    },
-    
-    // Help Section Styles
-    helpSection: {
-        marginHorizontal: 20,
-        marginVertical: 24,
-        padding: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    helpHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    helpTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        marginLeft: 12,
-    },
-    helpText: {
-        fontSize: 15,
-        color: 'rgba(255, 255, 255, 0.8)',
-        lineHeight: 22,
-        marginBottom: 20,
-    },
-    helpButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
         gap: 12,
     },
-    helpButton: {
-        flex: 1,
-        borderRadius: 16,
-        overflow: 'hidden',
-    },
-    helpButtonGradient: {
-        paddingVertical: 14,
-        paddingHorizontal: 20,
+    featureRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 12,
+    },
+    featureText: {
+        color: '#FFF',
+        fontSize: 15,
+        flex: 1,
+    },
+
+    // Botón dentro de la tarjeta
+    ctaButton: {
+        backgroundColor: '#FFF',
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    ctaText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+
+    // Footer General
+    footerNote: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 20,
+        opacity: 0.6,
+    },
+    footerText: {
+        color: '#FFF',
+        fontSize: 12,
+    },
+
+    // Error State
+    errorContainer: {
+        flex: 1,
         justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(253, 184, 19, 0.2)',
-        borderRadius: 16,
+        alignItems: 'center',
+        padding: 40,
     },
-    helpButtonText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#FDB813',
-        marginLeft: 8,
+    errorText: {
+        color: '#888',
+        fontSize: 16,
+        textAlign: 'center',
+        marginTop: 16,
+        marginBottom: 24,
     },
-    
-    // Spacing
-    bottomSpacing: {
-        height: 40,
+    retryButton: {
+        backgroundColor: '#333',
+        paddingHorizontal: 24,
+        paddingVertical: 12,
+        borderRadius: 8,
+    },
+    retryText: {
+        color: '#FFF',
+        fontWeight: 'bold',
     },
 });
 

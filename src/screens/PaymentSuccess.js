@@ -1,156 +1,29 @@
-// screens/PaymentSuccessScreen.js
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
+    TouchableOpacity,
     StatusBar,
-    SafeAreaView,
     Animated,
     Dimensions,
-    Platform,
     ScrollView,
-    ActivityIndicator
+    BackHandler
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { getPurchaseStatus } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { BlurView } from 'expo-blur';
 
+const { width } = Dimensions.get('window');
 
+// ------------------------------------------------------------------
+// --- COMPONENTES UI AUXILIARES ---
+// ------------------------------------------------------------------
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-// --- COMPONENTES ANIMADOS ---
-
-const SuccessAnimation = () => {
-    const scaleAnim = useRef(new Animated.Value(0)).current;
-    const pulseAnim = useRef(new Animated.Value(0)).current;
-    const checkAnim = useRef(new Animated.Value(0)).current;
-    const sparkleAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        // Secuencia de animación de entrada
-        Animated.sequence([
-            Animated.spring(scaleAnim, {
-                toValue: 1,
-                tension: 80,
-                friction: 4,
-                useNativeDriver: true,
-            }),
-            Animated.timing(checkAnim, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }),
-        ]).start();
-
-        // Animación de pulso continua
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulseAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(pulseAnim, {
-                    toValue: 0,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-
-        // Animación de destellos
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(sparkleAnim, {
-                    toValue: 1,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(sparkleAnim, {
-                    toValue: 0,
-                    duration: 1500,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-
-        // Feedback háptico de éxito
-        if (Platform.OS === 'ios') {
-            setTimeout(() => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            }, 500);
-        }
-    }, []);
-
-    const pulseStyle = {
-        opacity: pulseAnim.interpolate({ 
-            inputRange: [0, 0.5, 1], 
-            outputRange: [0, 0.15, 0] 
-        }),
-        transform: [{ 
-            scale: pulseAnim.interpolate({ 
-                inputRange: [0, 1], 
-                outputRange: [1, 2.2] 
-            }) 
-        }],
-    };
-
-    const checkStyle = {
-        opacity: checkAnim,
-        transform: [{ 
-            scale: checkAnim.interpolate({
-                inputRange: [0, 0.6, 1],
-                outputRange: [0, 1.1, 1],
-            })
-        }],
-    };
-
-    const sparkleRotation = sparkleAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
-
-    return (
-        <View style={styles.animationContainer}>
-            {/* Círculos de pulso */}
-            <Animated.View style={[styles.pulseCircle, styles.pulseOuter, pulseStyle]} />
-            <Animated.View style={[styles.pulseCircle, styles.pulseMiddle, pulseStyle]} />
-            
-            {/* Destellos rotatorios */}
-            <Animated.View 
-                style={[
-                    styles.sparkleContainer,
-                    { transform: [{ rotate: sparkleRotation }] }
-                ]}
-            >
-                <View style={[styles.sparkle, styles.sparkleTop]} />
-                <View style={[styles.sparkle, styles.sparkleRight]} />
-                <View style={[styles.sparkle, styles.sparkleBottom]} />
-                <View style={[styles.sparkle, styles.sparkleLeft]} />
-            </Animated.View>
-
-            {/* Ícono principal */}
-            <Animated.View style={[styles.iconContainer, { transform: [{ scale: scaleAnim }] }]}>
-                <LinearGradient
-                    colors={['#10B981', '#059669']}
-                    style={styles.iconGradient}
-                >
-                    <Animated.View style={checkStyle}>
-                        <MaterialCommunityIcons name="check-bold" size={48} color="#FFFFFF" />
-                    </Animated.View>
-                </LinearGradient>
-            </Animated.View>
-        </View>
-    );
-};
-
-
+// Tarjeta de Resumen del Plan (Versión corregida y segura)
 const PlanSummaryCard = ({ plan, delay = 0 }) => {
     const slideAnim = useRef(new Animated.Value(30)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -175,32 +48,13 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
         return () => clearTimeout(timer);
     }, [delay]);
 
-    const getPlanIcon = (planName) => {
-        // --- CORRECCIÓN: Validación de seguridad ---
-        if (!planName) return 'star'; 
-        
-        if (planName.includes('Completo')) return 'rocket-launch';
-        if (planName.includes('NexFactura')) return 'receipt';
-        if (planName.includes('NextManager')) return 'cog';
-        return 'star';
-    };
-
-    const getPlanColor = (planName) => {
-        // --- CORRECCIÓN: Validación de seguridad ---
-        if (!planName) return ['#FDB813', '#F59E0B'];
-
-        if (planName.includes('Completo')) return ['#FDB813', '#F59E0B'];
-        if (planName.includes('NexFactura')) return ['#6366F1', '#4F46E5'];
-        if (planName.includes('NextManager')) return ['#10B981', '#059669'];
-        return ['#FDB813', '#F59E0B'];
-    };
-
-    // --- CORRECCIÓN: Fallback seguro para el nombre ---
-    // Intentamos obtener 'product', si no 'name', y si no un string vacío para que no truene
-    const planName = plan?.product || plan?.name || '';
+    // Fallback seguro para el nombre del plan
+    const planName = plan?.name || plan?.product || 'Plan NextManager';
     
-    const planIcon = getPlanIcon(planName);
-    const gradientColors = getPlanColor(planName);
+    // Lógica visual simple basada en el nombre
+    const isPro = planName.includes('Completo') || planName.includes('Pro');
+    const iconName = isPro ? 'rocket-launch' : 'star';
+    const gradientColors = isPro ? ['#FDB813', '#F59E0B'] : ['#6366F1', '#4F46E5'];
 
     return (
         <Animated.View
@@ -222,7 +76,7 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
                             colors={gradientColors}
                             style={styles.planIconGradient}
                         >
-                            <MaterialCommunityIcons name={planIcon} size={24} color="#FFFFFF" />
+                            <MaterialCommunityIcons name={iconName} size={24} color="#FFFFFF" />
                         </LinearGradient>
                     </View>
                     
@@ -239,7 +93,7 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
 
                     <View style={styles.planPriceContainer}>
                         <Text style={styles.planPrice}>
-                            ${(plan?.price || 0).toLocaleString()}
+                            ${(plan?.price || 0).toLocaleString('es-MX')}
                         </Text>
                         <Text style={styles.planPeriodText}>
                             /{plan?.period === 'annually' ? 'año' : 'mes'}
@@ -251,350 +105,169 @@ const PlanSummaryCard = ({ plan, delay = 0 }) => {
     );
 };
 
+const DetailRow = ({ label, value, copyable }) => (
+    <View style={styles.detailRow}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.detailValue}>{value}</Text>
+            {copyable && <Feather name="copy" size={12} color="#666" style={{ marginLeft: 6 }} />}
+        </View>
+    </View>
+);
 
+// ------------------------------------------------------------------
+// --- PANTALLA PRINCIPAL: PAYMENT SUCCESS ---
+// ------------------------------------------------------------------
 
-const FeatureHighlight = ({ icon, title, description, delay = 0 }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(20)).current;
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 500,
-                    useNativeDriver: true,
-                }),
-                Animated.spring(slideAnim, {
-                    toValue: 0,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }, delay);
-
-        return () => clearTimeout(timer);
-    }, [delay]);
-
-    return (
-        <Animated.View
-            style={[
-                styles.featureItem,
-                {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }]
-                }
-            ]}
-        >
-            <View style={styles.featureIconContainer}>
-                <MaterialCommunityIcons name={icon} size={20} color="#FDB813" />
-            </View>
-            <View style={styles.featureTextContainer}>
-                <Text style={styles.featureTitle}>{title}</Text>
-                <Text style={styles.featureDescription}>{description}</Text>
-            </View>
-        </Animated.View>
-    );
-};
-
-// --- COMPONENTE PRINCIPAL ---
 const PaymentSuccessScreen = () => {
-   const navigation = useNavigation();
+    const navigation = useNavigation();
     const route = useRoute();
-    const { verifySession } = useAuth(); // Para forzar la actualización del usuario
 
-    // --- NUEVOS ESTADOS ---
-    const [isVerifying, setIsVerifying] = useState(true);
-    const [paymentError, setPaymentError] = useState(null);
+    // 1. Obtener parámetros de la navegación (Mercado Pago + Datos Locales)
+    // Nota: 'payment_id' y 'status' suelen venir de la respuesta de MP o del Deep Link.
+    // 'plan' lo pasamos nosotros desde PaymentGatewayScreen para mostrar el resumen.
+    const { 
+        payment_id = 'N/A', 
+        status = 'approved', 
+        collection_id, 
+        plan = {} // Objeto del plan comprado
+    } = route.params || {};
+
+    const transactionId = payment_id !== 'N/A' ? payment_id : (collection_id || Math.floor(Math.random() * 1000000000));
     
-    const [isNavigating, setIsNavigating] = useState(false);
-    const buttonScaleAnim = useRef(new Animated.Value(1)).current;
-    const contentFadeAnim = useRef(new Animated.Value(0)).current;
+    // Animaciones
+    const scaleAnim = useRef(new Animated.Value(0)).current;
+    const fadeAnim = useRef(new Animated.Value(0)).current;
 
-    const { selectedPlan, purchaseId } = route.params || {};
-
-    // Animaciones para los botones
-
-// --- LÓGICA DE VERIFICACIÓN DE PAGO (POLLING) ---
     useEffect(() => {
-        if (!purchaseId) {
-            setPaymentError('Error: No se recibió un ID de compra válido.');
-            setIsVerifying(false);
-            return;
-        }
+        // Feedback háptico de éxito al montar
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-        let attempts = 0;
-        const maxAttempts = 10; // 10 intentos (30 segundos)
-        let intervalId;
+        // Bloquear botón atrás (Hardware) para evitar volver al carrito pagado
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', () => true);
 
-        const checkStatus = async () => {
-            attempts++;
-            try {
-                console.log(`[PaymentSuccess] Verificando estado... (Intento ${attempts})`);
-                const response = await getPurchaseStatus(purchaseId);
-
-                if (response.success && response.status === 'active') {
-                    // ¡ÉXITO!
-                    clearInterval(intervalId);
-                    setIsVerifying(false);
-                    setPaymentError(null);
-                    
-                    // Forzamos al AuthContext a recargar los datos del usuario
-                    await verifySession();
-                    
-                    // Inicia la animación de entrada
-                    Animated.timing(contentFadeAnim, {
-                        toValue: 1,
-                        duration: 800,
-                        delay: 500, // Un pequeño retraso post-verificación
-                        useNativeDriver: true,
-                    }).start();
-
-                } else if (attempts >= maxAttempts) {
-                    // Se acabó el tiempo, pero no es un error fatal
-                    clearInterval(intervalId);
-                    setIsVerifying(false);
-                    setPaymentError('Tu pago está tardando en procesarse. Lo verificaremos en segundo plano. Ya puedes continuar.');
-                    // Aún así, iniciamos la animación de "éxito"
-                    Animated.timing(contentFadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }).start();
-                }
-                // Si sigue 'pending_payment', no hace nada y espera al siguiente ciclo
-                
-            } catch (error) {
-                clearInterval(intervalId);
-                setPaymentError('Hubo un error al verificar tu pago. Por favor, contacta a soporte.');
-                setIsVerifying(false);
-            }
-        };
-
-        // Inicia el sondeo: llama a checkStatus inmediatamente y luego cada 3 segundos
-        checkStatus();
-        intervalId = setInterval(checkStatus, 3000);
-
-        // Limpia el intervalo si el usuario sale de la pantalla
-        return () => clearInterval(intervalId);
-        
-    }, [purchaseId, verifySession]); // Dependencias correctas
-
-    // --- RENDERIZADO CONDICIONAL ---
-
-    // Estado 1: Verificando
-    if (isVerifying) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <LinearGradient colors={['#1a1a1a', '#121212', '#0f0f0f']} style={styles.gradient}>
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                        <ActivityIndicator size="large" color="#FDB813" />
-                        <Text style={{ color: 'white', fontSize: 18, marginTop: 20, textAlign: 'center' }}>
-                            Verificando tu pago...
-                        </Text>
-                        <Text style={{ color: '#A0A0A0', fontSize: 14, marginTop: 10, textAlign: 'center' }}>
-                            Estamos confirmando la transacción con el banco. Esto puede tardar unos segundos.
-                        </Text>
-                    </View>
-                </LinearGradient>
-            </SafeAreaView>
-        );
-    }
-    
-    // Estado 2: Error (Opcional, si quieres un estado de error)
-    if (paymentError && !isVerifying) {
-         return (
-             <SafeAreaView style={styles.container}>
-                 <LinearGradient colors={['#1a1a1a', '#121212', '#0f0f0f']} style={styles.gradient}>
-                     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-                         <MaterialCommunityIcons name="alert-circle-outline" size={60} color="#FF6B6B" />
-                         <Text style={{ color: 'white', fontSize: 22, fontWeight: 'bold', marginTop: 20, textAlign: 'center' }}>
-                             Pago en Proceso
-                         </Text>
-                         <Text style={{ color: '#A0A0A0', marginTop: 10, textAlign: 'center' }}>
-                             {paymentError}
-                         </Text>
-                         {/* Puedes añadir botones para reintentar o ir al dashboard */}
-                         <TouchableOpacity onPress={() => navigation.navigate('Dashboard')}>
-                             <Text style={{ color: '#FDB813', marginTop: 20 }}>Ir al Dashboard</Text>
-                         </TouchableOpacity>
-                     </View>
-                 </LinearGradient>
-             </SafeAreaView>
-         );
-    }
-
-    // Usamos fallback por si se accede a la pantalla sin parámetros
-
-
-    const handlePrimaryAction = async () => {
-        if (isNavigating) return;
-        
-        setIsNavigating(true);
-        
-        // Feedback háptico
-        if (Platform.OS === 'ios') {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        }
-        
-        // Animación del botón
+        // Secuencia de animación de entrada
         Animated.sequence([
-            Animated.timing(buttonScaleAnim, {
-                toValue: 0.95,
-                duration: 100,
-                useNativeDriver: true,
-            }),
-            Animated.timing(buttonScaleAnim, {
+            Animated.spring(scaleAnim, {
                 toValue: 1,
-                duration: 100,
+                tension: 50,
+                friction: 6,
                 useNativeDriver: true,
             }),
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 500,
+                useNativeDriver: true,
+            })
         ]).start();
 
-        setTimeout(() => {
-            navigation.navigate('RestaurantConfig');
-            setIsNavigating(false);
-        }, 200);
-    };
+        return () => backHandler.remove();
+    }, []);
 
-    const handleSecondaryAction = async () => {
-        if (Platform.OS === 'ios') {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        navigation.navigate('Dashboard');
-    };
-
-    const handleSupportAction = () => {
-        // Aquí podrías abrir el soporte, FAQ, etc.
-        console.log('Abriendo soporte...');
+    const handleContinue = () => {
+        // Resetear la navegación para que el usuario no pueda volver atrás.
+        // Lo mandamos al Dashboard (Monitor).
+        // Como ya pagó, el Monitor debería detectar que ya tiene plan (aunque quizás le falte configurar restaurante)
+        navigation.dispatch(
+            CommonActions.reset({
+                index: 0,
+                routes: [
+                    { name: 'Monitor' }, // O 'RestaurantConfig' si tienes esa pantalla lista
+                ],
+            })
+        );
     };
 
     return (
-        <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#121212" translucent />
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+            <StatusBar barStyle="light-content" backgroundColor="#000" />
             
-            <LinearGradient 
-                colors={['#1a1a1a', '#121212', '#0f0f0f']} 
-                locations={[0, 0.6, 1]}
-                style={styles.gradient}
-            >
-                <ScrollView 
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContainer}
-                    showsVerticalScrollIndicator={false}
-                    bounces={false}
-                >
-                    {/* Animación de éxito */}
-                    <SuccessAnimation />
+            {/* Fondo */}
+            <LinearGradient colors={['#000000', '#111111']} style={StyleSheet.absoluteFillObject} />
 
-                    {/* Título y subtítulo */}
-                    <Animated.View style={[styles.textContainer, { opacity: contentFadeAnim }]}>
-                        <Text style={styles.title}>¡Pago Completado!</Text>
-                        <Text style={styles.subtitle}>
-                            Felicidades. Tu plan ha sido activado exitosamente y estás listo 
-                            para llevar tu negocio al siguiente nivel.
-                        </Text>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                
+                {/* 1. Icono de Éxito Animado */}
+                <View style={styles.successIconContainer}>
+                    <Animated.View style={[styles.iconWrapper, { transform: [{ scale: scaleAnim }] }]}>
+                        <LinearGradient
+                            colors={['#10B981', '#059669']}
+                            style={styles.iconGradient}
+                        >
+                            <MaterialCommunityIcons name="check-decagram" size={64} color="#FFF" />
+                        </LinearGradient>
+                        {/* Efecto de brillo detrás */}
+                        <View style={styles.glowEffect} />
                     </Animated.View>
+                </View>
 
-                    {/* Resumen del plan */}
-                    <PlanSummaryCard plan={selectedPlan} delay={1200} />
+                {/* 2. Mensajes de Texto */}
+                <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
+                    <Text style={styles.title}>¡Pago Exitoso!</Text>
+                    <Text style={styles.subtitle}>
+                        Tu suscripción ha sido activada correctamente.{"\n"}Gracias por confiar en NextManager.
+                    </Text>
+                </Animated.View>
 
-                    {/* Características destacadas */}
-                    <Animated.View style={[styles.featuresContainer, { opacity: contentFadeAnim }]}>
-                        <View style={styles.featuresHeader}>
-                            <MaterialCommunityIcons name="star-circle" size={20} color="#FDB813" />
-                            <Text style={styles.featuresTitle}>Lo que tienes ahora</Text>
+                {/* 3. Tarjeta del Plan (Lo que compró) */}
+                <View style={styles.sectionContainer}>
+                    <PlanSummaryCard plan={plan} delay={300} />
+                </View>
+
+                {/* 4. Detalles de la Transacción (Recibo) */}
+                <Animated.View 
+                    style={[
+                        styles.receiptCard, 
+                        { opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }
+                    ]}
+                >
+                    <BlurView intensity={10} tint="dark" style={styles.blurContainer}>
+                        <View style={styles.receiptHeader}>
+                            <Text style={styles.receiptTitle}>Detalles de Transacción</Text>
+                            <View style={styles.statusBadge}>
+                                <Text style={styles.statusText}>APROBADO</Text>
+                            </View>
                         </View>
                         
-                        <FeatureHighlight
-                            icon="flash"
-                            title="Activación Inmediata"
-                            description="Tu cuenta está lista para usar ahora mismo"
-                            delay={1400}
-                        />
-                        <FeatureHighlight
-                            icon="shield-check"
-                            title="Garantía de 30 días"
-                            description="Si no estás satisfecho, te devolvemos tu dinero"
-                            delay={1600}
-                        />
-                        <FeatureHighlight
-                            icon="headphones"
-                            title="Soporte Premium"
-                            description="Acceso prioritario a nuestro equipo de expertos"
-                            delay={1800}
-                        />
-                    </Animated.View>
-
-                    {/* Métricas de confianza */}
-                    <Animated.View style={[styles.trustMetrics, { opacity: contentFadeAnim }]}>
-                        <View style={styles.trustMetric}>
-                            <MaterialCommunityIcons name="account-group" size={24} color="#10B981" />
-                            <Text style={styles.trustMetricNumber}>+10,000</Text>
-                            <Text style={styles.trustMetricLabel}>Empresas activas</Text>
+                        <View style={styles.divider} />
+                        
+                        <DetailRow label="ID Referencia" value={`#${transactionId}`} copyable />
+                        <DetailRow label="Fecha" value={new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })} />
+                        <DetailRow label="Método" value="Mercado Pago" />
+                        
+                        <View style={styles.divider} />
+                        
+                        <View style={styles.totalRow}>
+                            <Text style={styles.totalLabel}>Total Pagado</Text>
+                            <Text style={styles.totalValue}>
+                                {/* Calculamos el total aproximado si no viene en params, sumando IVA al precio base */}
+                                ${((plan?.price || 0) * 1.16).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                            </Text>
                         </View>
-                        <View style={styles.trustMetricDivider} />
-                        <View style={styles.trustMetric}>
-                            <MaterialCommunityIcons name="star" size={24} color="#FDB813" />
-                            <Text style={styles.trustMetricNumber}>4.9</Text>
-                            <Text style={styles.trustMetricLabel}>Calificación promedio</Text>
-                        </View>
-                        <View style={styles.trustMetricDivider} />
-                        <View style={styles.trustMetric}>
-                            <MaterialCommunityIcons name="clock-fast" size={24} color="#6366F1" />
-                            <Text style={styles.trustMetricNumber}>24/7</Text>
-                            <Text style={styles.trustMetricLabel}>Disponibilidad</Text>
-                        </View>
-                    </Animated.View>
-                </ScrollView>
-
-                {/* Footer con botones de acción */}
-                <Animated.View style={[styles.footer, { opacity: contentFadeAnim }]}>
-                    <View style={styles.footerContent}>
-                        {/* Botón principal */}
-                        <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
-                            <TouchableOpacity
-                                style={[
-                                    styles.primaryButton,
-                                    isNavigating && styles.primaryButtonDisabled
-                                ]}
-                                onPress={handlePrimaryAction}
-                                disabled={isNavigating}
-                                activeOpacity={0.8}
-                            >
-                                <LinearGradient
-                                    colors={['#FDB813', '#F59E0B']}
-                                    style={styles.primaryButtonGradient}
-                                >
-                                    <MaterialCommunityIcons name="rocket-launch" size={20} color="#121212" />
-                                    <Text style={styles.primaryButtonText}>
-                                        {isNavigating ? 'Iniciando...' : 'Comenzar Configuración'}
-                                    </Text>
-                                    <Feather name="arrow-right" size={20} color="#121212" />
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </Animated.View>
-
-                        {/* Opciones secundarias */}
-                        <View style={styles.secondaryActions}>
-                            <TouchableOpacity 
-                                style={styles.secondaryButton} 
-                                onPress={handleSecondaryAction}
-                                activeOpacity={0.7}
-                            >
-                                <MaterialCommunityIcons name="view-dashboard" size={16} color="#A0A0A0" />
-                                <Text style={styles.secondaryButtonText}>Ir al Dashboard</Text>
-                            </TouchableOpacity>
-                            
-                            <TouchableOpacity 
-                                style={styles.secondaryButton} 
-                                onPress={handleSupportAction}
-                                activeOpacity={0.7}
-                            >
-                                <MaterialCommunityIcons name="help-circle" size={16} color="#A0A0A0" />
-                                <Text style={styles.secondaryButtonText}>¿Necesitas ayuda?</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
+                    </BlurView>
                 </Animated.View>
-            </LinearGradient>
+
+            </ScrollView>
+
+            {/* 5. Botón de Acción Principal */}
+            <View style={styles.footer}>
+                <TouchableOpacity 
+                    style={styles.actionButton}
+                    onPress={handleContinue}
+                    activeOpacity={0.9}
+                >
+                    <LinearGradient
+                        colors={['#FDB813', '#F59E0B']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.buttonGradient}
+                    >
+                        <Text style={styles.buttonText}>Continuar al Dashboard</Text>
+                        <Feather name="arrow-right" size={20} color="#000" />
+                    </LinearGradient>
+                </TouchableOpacity>
+            </View>
+
         </SafeAreaView>
     );
 };
@@ -602,119 +275,87 @@ const PaymentSuccessScreen = () => {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#121212',
+        backgroundColor: '#000',
     },
-    gradient: {
-        flex: 1,
-    },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContainer: {
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 40 : 80,
-        paddingHorizontal: 20,
-        paddingBottom: 200,
+    scrollContent: {
+        paddingHorizontal: 24,
+        paddingTop: 40,
+        paddingBottom: 100, // Espacio para el footer
         alignItems: 'center',
     },
-
-    // Animation Styles
-    animationContainer: {
-        width: 200,
-        height: 200,
+    
+    // Icono Éxito
+    successIconContainer: {
+        marginBottom: 24,
+        alignItems: 'center',
         justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 40,
+    },
+    iconWrapper: {
         position: 'relative',
     },
-    pulseCircle: {
+    iconGradient: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2,
+        shadowColor: "#10B981",
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.5,
+        shadowRadius: 20,
+        elevation: 15,
+    },
+    glowEffect: {
         position: 'absolute',
-        borderRadius: 100,
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    },
-    pulseOuter: {
-        width: 180,
-        height: 180,
-    },
-    pulseMiddle: {
-        width: 140,
-        height: 140,
-    },
-    sparkleContainer: {
-        position: 'absolute',
-        width: 160,
-        height: 160,
-    },
-    sparkle: {
-        position: 'absolute',
-        width: 4,
-        height: 4,
-        backgroundColor: '#FDB813',
-        borderRadius: 2,
-    },
-    sparkleTop: { top: 0, left: '50%', marginLeft: -2 },
-    sparkleRight: { right: 0, top: '50%', marginTop: -2 },
-    sparkleBottom: { bottom: 0, left: '50%', marginLeft: -2 },
-    sparkleLeft: { left: 0, top: '50%', marginTop: -2 },
-    iconContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        overflow: 'hidden',
-        shadowColor: '#10B981',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 16,
+        top: 10,
+        left: 10,
+        right: 10,
+        bottom: 10,
+        borderRadius: 50,
+        backgroundColor: '#10B981',
+        opacity: 0.3,
+        transform: [{ scale: 1.3 }],
         zIndex: 1,
     },
-    iconGradient: {
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
 
-    // Text Styles
-    textContainer: {
-        alignItems: 'center',
-        marginBottom: 32,
-        paddingHorizontal: 20,
-    },
+    // Textos
     title: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: '#FFFFFF',
+        color: '#FFF',
+        marginBottom: 10,
         textAlign: 'center',
-        marginBottom: 16,
-        letterSpacing: -0.5,
     },
     subtitle: {
         fontSize: 16,
         color: '#A0A0A0',
         textAlign: 'center',
         lineHeight: 24,
-        maxWidth: screenWidth * 0.85,
+        marginBottom: 30,
     },
 
-    // Plan Card Styles
-    planCard: {
+    // Sección
+    sectionContainer: {
         width: '100%',
-        marginBottom: 32,
-        borderRadius: 20,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 16,
-        elevation: 8,
+        marginBottom: 20,
     },
-    planCardGradient: {
+
+    // Plan Card (Estilos específicos del componente interno)
+    planCard: {
+        borderRadius: 16,
+        marginBottom: 10,
+        overflow: 'hidden',
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: '#1A1A1A',
+    },
+    planCardGradient: {
+        padding: 20,
     },
     planCardContent: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 24,
     },
     planIconContainer: {
         marginRight: 16,
@@ -722,9 +363,9 @@ const styles = StyleSheet.create({
     planIconGradient: {
         width: 48,
         height: 48,
-        borderRadius: 24,
-        alignItems: 'center',
+        borderRadius: 12,
         justifyContent: 'center',
+        alignItems: 'center',
     },
     planInfo: {
         flex: 1,
@@ -732,194 +373,139 @@ const styles = StyleSheet.create({
     planBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        alignSelf: 'flex-start',
-        marginBottom: 8,
+        marginBottom: 4,
+        gap: 4,
     },
     planBadgeText: {
-        color: '#10B981',
         fontSize: 10,
         fontWeight: 'bold',
-        marginLeft: 4,
+        color: '#10B981',
         letterSpacing: 0.5,
     },
     planName: {
-        color: '#FFFFFF',
         fontSize: 18,
         fontWeight: 'bold',
-        marginBottom: 4,
+        color: '#FFFFFF',
     },
     planPeriod: {
-        color: '#A0A0A0',
         fontSize: 14,
-        fontWeight: '500',
+        color: '#A0A0A0',
     },
     planPriceContainer: {
         alignItems: 'flex-end',
     },
     planPrice: {
-        color: '#FDB813',
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
-        letterSpacing: -0.5,
+        color: '#FFFFFF',
     },
     planPeriodText: {
-        color: '#A0A0A0',
         fontSize: 12,
-        fontWeight: '500',
+        color: '#888',
     },
 
-    // Features Styles
-    featuresContainer: {
+    // Recibo Card
+    receiptCard: {
         width: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    featuresHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    featuresTitle: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginLeft: 12,
-    },
-    featureItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: 16,
-        paddingVertical: 8,
-    },
-    featureIconContainer: {
-        width: 32,
-        height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 16,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.03)',
     },
-    featureTextContainer: {
-        flex: 1,
-        paddingTop: 2,
+    blurContainer: {
+        padding: 20,
     },
-    featureTitle: {
-        color: '#FFFFFF',
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    featureDescription: {
-        color: '#A0A0A0',
-        fontSize: 14,
-        lineHeight: 20,
-    },
-
-    // Trust Metrics Styles
-    trustMetrics: {
+    receiptHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        width: '100%',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        marginBottom: 5,
     },
-    trustMetric: {
+    receiptTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFF',
+    },
+    statusBadge: {
+        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 4,
+    },
+    statusText: {
+        color: '#10B981',
+        fontSize: 10,
+        fontWeight: 'bold',
+    },
+    divider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginVertical: 15,
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 10,
+    },
+    detailLabel: {
+        color: '#888',
+        fontSize: 14,
+    },
+    detailValue: {
+        color: '#DDD',
+        fontSize: 14,
+        fontWeight: '500',
+    },
+    totalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        flex: 1,
+        marginTop: 5,
     },
-    trustMetricDivider: {
-        width: 1,
-        height: 40,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        marginHorizontal: 16,
+    totalLabel: {
+        color: '#FFF',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
-    trustMetricNumber: {
-        color: '#FFFFFF',
+    totalValue: {
+        color: '#FDB813',
         fontSize: 20,
         fontWeight: 'bold',
-        marginTop: 8,
-        marginBottom: 4,
-    },
-    trustMetricLabel: {
-        color: '#A0A0A0',
-        fontSize: 12,
-        textAlign: 'center',
-        lineHeight: 16,
     },
 
-    // Footer Styles
+    // Footer
     footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(18, 18, 18, 0.95)',
-        backdropFilter: 'blur(20px)',
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    footerContent: {
-        paddingHorizontal: 20,
-        paddingTop: 24,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 24,
-    },
-    primaryButton: {
-        borderRadius: 16,
-        overflow: 'hidden',
-        marginBottom: 16,
-        shadowColor: '#FDB813',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 16,
-    },
-    primaryButtonDisabled: {
-        shadowOpacity: 0.1,
-    },
-    primaryButtonGradient: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 18,
         paddingHorizontal: 24,
+        paddingBottom: Platform.OS === 'ios' ? 10 : 24,
+        backgroundColor: 'transparent', 
     },
-    primaryButtonText: {
-        color: '#121212',
+    actionButton: {
+        width: '100%',
+        borderRadius: 14,
+        overflow: 'hidden',
+        shadowColor: '#FDB813',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+        elevation: 5,
+        marginBottom: 20,
+    },
+    buttonGradient: {
+        paddingVertical: 18,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 10,
+    },
+    buttonText: {
+        color: '#000',
         fontSize: 16,
         fontWeight: 'bold',
-        marginHorizontal: 12,
-        letterSpacing: 0.5,
-    },
-    secondaryActions: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingTop: 8,
-    },
-    secondaryButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-    },
-    secondaryButtonText: {
-        color: '#A0A0A0',
-        fontSize: 14,
-        fontWeight: '500',
-        marginLeft: 8,
     },
 });
 

@@ -1,1273 +1,452 @@
-// screens/PaymentGatewayScreen.js
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
-    TouchableOpacity,
     StyleSheet,
-    ActivityIndicator,
-    StatusBar,
+    TouchableOpacity,
     SafeAreaView,
-    ScrollView,
-    Image,
-    Animated,
-    Dimensions,
-    Platform,
+    StatusBar,
+    ActivityIndicator,
     Alert,
-    Linking
+    ScrollView,
+    Linking,
+    Dimensions
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useAuth } from '../context/AuthContext';
-import { createPaymentPreference } from '../services/api';
+import { BlurView } from 'expo-blur';
+import { createPaymentPreference } from '../services/api'; // Tu servicio existente
 
+const { width } = Dimensions.get('window');
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+// --- COMPONENTES UI ---
 
-// --- COMPONENTES UI MEJORADOS ---
+const DetailRow = ({ label, value, isBold, isTotal, color }) => (
+    <View style={[styles.row, isTotal && styles.totalRow]}>
+        <Text style={[
+            styles.rowLabel, 
+            isBold && styles.boldText, 
+            isTotal && styles.totalText
+        ]}>
+            {label}
+        </Text>
+        <Text style={[
+            styles.rowValue, 
+            isBold && styles.boldText, 
+            isTotal && styles.totalText,
+            color && { color }
+        ]}>
+            {value}
+        </Text>
+    </View>
+);
 
-const AnimatedSummaryLineItem = ({ label, value, isTotal = false, delay = 0, icon = null }) => {
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const slideAnim = useRef(new Animated.Value(20)).current;
+const SecurityBadge = () => (
+    <View style={styles.securityContainer}>
+        <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
+        <Text style={styles.securityText}>Pago 100% Seguro encriptado con SSL</Text>
+    </View>
+);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                }),
-                Animated.spring(slideAnim, {
-                    toValue: 0,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }, delay);
+// --- PANTALLA PRINCIPAL ---
 
-        return () => clearTimeout(timer);
-    }, [delay, fadeAnim, slideAnim]);
-
-    return (
-        <Animated.View
-            style={[
-                styles.summaryLine,
-                isTotal && styles.summaryTotalLine,
-                {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }]
-                }
-            ]}
-        >
-            <View style={styles.summaryLabelContainer}>
-                {icon && (
-                    <View style={styles.summaryIcon}>
-                        <Feather name={icon} size={16} color={isTotal ? "#FDB813" : "#A0A0A0"} />
-                    </View>
-                )}
-                <Text style={[styles.summaryLabel, isTotal && styles.summaryTotalLabel]}>
-                    {label}
-                </Text>
-            </View>
-            <Text style={[styles.summaryValue, isTotal && styles.summaryTotalValue]}>
-                {value}
-            </Text>
-        </Animated.View>
-    );
-};
-
-const PlanCard = ({ plan, delay = 0 }) => {
-    const scaleAnim = useRef(new Animated.Value(0.95)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const shimmerAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.parallel([
-                Animated.spring(scaleAnim, {
-                    toValue: 1,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 600,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-
-            // Shimmer effect
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(shimmerAnim, {
-                        toValue: 1,
-                        duration: 2000,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(shimmerAnim, {
-                        toValue: 0,
-                        duration: 2000,
-                        useNativeDriver: true,
-                    }),
-                ])
-            ).start();
-        }, delay);
-
-        return () => clearTimeout(timer);
-    }, [delay, scaleAnim, fadeAnim, shimmerAnim]);
-
-    const getPlanColor = (planName) => {
-        // --- CORRECCIÓN DE SEGURIDAD ---
-        if (!planName) return ['#FDB813', '#F59E0B']; // Color por defecto si es undefined
-        
-        if (planName.includes('Completo')) return ['#FDB813', '#F59E0B'];
-        if (planName.includes('NexFactura')) return ['#6366F1', '#4F46E5'];
-        if (planName.includes('NextManager')) return ['#10B981', '#059669'];
-        return ['#FDB813', '#F59E0B'];
-    };
-
-    // --- CORRECCIÓN: Usar product o name ---
-    const planName = plan?.product || plan?.name || 'Plan';
-    const gradient = getPlanColor(planName);
-
-    return (
-        <Animated.View
-            style={[
-                styles.planCard,
-                {
-                    transform: [{ scale: scaleAnim }],
-                    opacity: fadeAnim,
-                }
-            ]}
-        >
-            <LinearGradient
-                colors={[...gradient, 'rgba(0,0,0,0.1)']}
-                style={styles.planCardGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-            >
-                <Animated.View
-                    style={[
-                        styles.shimmerOverlay,
-                        {
-                            opacity: shimmerAnim.interpolate({
-                                inputRange: [0, 1],
-                                outputRange: [0, 0.1],
-                            }),
-                        }
-                    ]}
-                />
-                
-                <View style={styles.planCardContent}>
-                    <View style={styles.planCardHeader}>
-                        <View style={styles.planBadge}>
-                            <Feather name="check-circle" size={16} color="#FFFFFF" />
-                            <Text style={styles.planBadgeText}>SELECCIONADO</Text>
-                        </View>
-                        {plan?.period === 'annually' && (
-                            <View style={styles.savingsBadge}>
-                                <Text style={styles.savingsBadgeText}>AHORRO 15%</Text>
-                            </View>
-                        )}
-                    </View>
-                    
-                    <Text style={styles.planName}>{planName}</Text>
-                    <Text style={styles.planPeriod}>
-                        Plan {plan?.period === 'annually' ? 'Anual' : 'Mensual'}
-                    </Text>
-                    
-                    <View style={styles.planPriceContainer}>
-                        <Text style={styles.planCurrency}>$</Text>
-                        <Text style={styles.planPrice}>{(plan?.price || 0).toLocaleString()}</Text>
-                        <Text style={styles.planPeriodText}>
-                            /{plan?.period === 'annually' ? 'año' : 'mes'}
-                        </Text>
-                    </View>
-
-                    {plan?.period === 'annually' && (
-                        <View style={styles.planHighlight}>
-                            <MaterialCommunityIcons name="trending-up" size={16} color="#10B981" />
-                            <Text style={styles.planHighlightText}>
-                                ¡Mejor opción! Ahorras ${(plan.price * 0.15).toFixed(0)} al año
-                            </Text>
-                        </View>
-                    )}
-                </View>
-            </LinearGradient>
-        </Animated.View>
-    );
-};
-
-const PaymentMethodCard = ({ delay = 0 }) => {
-    const slideAnim = useRef(new Animated.Value(30)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 500,
-                    useNativeDriver: true,
-                }),
-                Animated.spring(slideAnim, {
-                    toValue: 0,
-                    tension: 50,
-                    friction: 8,
-                    useNativeDriver: true,
-                }),
-            ]).start();
-        }, delay);
-
-        return () => clearTimeout(timer);
-    }, [delay, fadeAnim, slideAnim]);
-
-    return (
-        <Animated.View
-            style={[
-                styles.paymentMethodCard,
-                {
-                    opacity: fadeAnim,
-                    transform: [{ translateY: slideAnim }]
-                }
-            ]}
-        >
-            <View style={styles.paymentMethodHeader}>
-                <View style={styles.securePaymentBadge}>
-                    <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
-                    <Text style={styles.securePaymentText}>PAGO SEGURO</Text>
-                </View>
-            </View>
-
-            <View style={styles.paymentMethodContainer}>
-                <Image 
-                    source={{ uri: 'https://logolook.net/wp-content/uploads/2021/07/Mercado-Pago-Logo-2016.png' }} 
-                    style={styles.paymentLogo}
-                    resizeMode="contain"
-                />
-                <Text style={styles.paymentMethodDescription}>
-                    Procesado de forma segura por Mercado Pago
-                </Text>
-            </View>
-
-            <View style={styles.paymentFeatures}>
-                <View style={styles.paymentFeature}>
-                    <Feather name="shield" size={16} color="#10B981" />
-                    <Text style={styles.paymentFeatureText}>Encriptación SSL</Text>
-                </View>
-                <View style={styles.paymentFeature}>
-                    <Feather name="credit-card" size={16} color="#10B981" />
-                    <Text style={styles.paymentFeatureText}>Tarjetas principales</Text>
-                </View>
-                <View style={styles.paymentFeature}>
-                    <Feather name="smartphone" size={16} color="#10B981" />
-                    <Text style={styles.paymentFeatureText}>Pago móvil</Text>
-                </View>
-            </View>
-        </Animated.View>
-    );
-};
-
-const ProcessingModal = ({ isVisible }) => {
-    const scaleAnim = useRef(new Animated.Value(0)).current;
-    const rotateAnim = useRef(new Animated.Value(0)).current;
-    const pulseAnim = useRef(new Animated.Value(1)).current;
-
-    useEffect(() => {
-        if (isVisible) {
-            Animated.spring(scaleAnim, {
-                toValue: 1,
-                tension: 50,
-                friction: 8,
-                useNativeDriver: true,
-            }).start();
-
-            Animated.loop(
-                Animated.timing(rotateAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    useNativeDriver: true,
-                })
-            ).start();
-
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(pulseAnim, {
-                        toValue: 1.1,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(pulseAnim, {
-                        toValue: 1,
-                        duration: 1000,
-                        useNativeDriver: true,
-                    }),
-                ])
-            ).start();
-        } else {
-            Animated.timing(scaleAnim, {
-                toValue: 0,
-                duration: 200,
-                useNativeDriver: true,
-            }).start();
-        }
-    }, [isVisible, scaleAnim, rotateAnim, pulseAnim]);
-
-    if (!isVisible) return null;
-
-    const spin = rotateAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
-
-    return (
-        <View style={styles.modalOverlay}>
-            <Animated.View
-                style={[
-                    styles.processingModal,
-                    { transform: [{ scale: scaleAnim }] }
-                ]}
-            >
-                <LinearGradient
-                    colors={['#1e1e1e', '#2a2a2a']}
-                    style={styles.processingModalContent}
-                >
-                    <Animated.View
-                        style={[
-                            styles.loadingSpinner,
-                            { 
-                                transform: [
-                                    { rotate: spin },
-                                    { scale: pulseAnim }
-                                ] 
-                            }
-                        ]}
-                    >
-                        <MaterialCommunityIcons name="loading" size={32} color="#FDB813" />
-                    </Animated.View>
-                    <Text style={styles.processingTitle}>Procesando Pago</Text>
-                    <Text style={styles.processingText}>
-                        Te estamos redirigiendo a Mercado Pago de forma segura...
-                    </Text>
-                    <View style={styles.processingSteps}>
-                        <Text style={styles.processingStep}>• Verificando datos</Text>
-                        <Text style={styles.processingStep}>• Estableciendo conexión segura</Text>
-                        <Text style={styles.processingStep}>• Preparando checkout</Text>
-                    </View>
-                </LinearGradient>
-            </Animated.View>
-        </View>
-    );
-};
-
-// --- COMPONENTE PRINCIPAL ---
 const PaymentGatewayScreen = () => {
     const navigation = useNavigation();
     const route = useRoute();
-const { user, isLoading: isAuthLoading } = useAuth();
     
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [showProcessingModal, setShowProcessingModal] = useState(false);
-    
-    // Animaciones
-    const headerFadeAnim = useRef(new Animated.Value(0)).current;
-    const headerSlideAnim = useRef(new Animated.Value(-50)).current;
-    const buttonScaleAnim = useRef(new Animated.Value(1)).current;
-    const buttonGlowAnim = useRef(new Animated.Value(0)).current;
+    // 1. Recibir datos del plan seleccionado
+    const { selectedPlan } = route.params || {};
 
+    const [isLoading, setIsLoading] = useState(false);
+
+    // Validación de seguridad por si llegan params vacíos
     useEffect(() => {
-        // Animación de entrada del header
-        Animated.parallel([
-            Animated.timing(headerFadeAnim, {
-                toValue: 1,
-                duration: 600,
-                useNativeDriver: true,
-            }),
-            Animated.spring(headerSlideAnim, {
-                toValue: 0,
-                tension: 50,
-                friction: 8,
-                useNativeDriver: true,
-            }),
-        ]).start();
-
-        // Efecto de brillo en el botón
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(buttonGlowAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(buttonGlowAnim, {
-                    toValue: 0,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
-    }, []);
-
-    // Con fallback mejorado para desarrollo
-    const { selectedPlan } = route.params || {
-        selectedPlan: {
-            product: 'Paquete Completo',
-            name: 'Plan Anual',
-            price: 7500,
-            period: 'annually',
-            planId: 'completo'
+        if (!selectedPlan) {
+            Alert.alert("Error", "No se seleccionó ningún plan.");
+            navigation.goBack();
         }
-    };
+    }, [selectedPlan]);
 
-   const handlePayment = async () => {
-    if (isProcessing) return;
+    if (!selectedPlan) return null;
 
-    // --- CORRECCIÓN CLAVE ---
-    // 1. Validamos 'planId' (que viene de PlanSelection) y 'user.profile.id' (que viene de AuthContext)
-    const planId = selectedPlan?.planId;
-    const billingCycle = selectedPlan?.period;
-    const userId = user?.profile?.id; // <-- Usamos la estructura anidada
+    // 2. Cálculos Financieros (Subtotal, IVA, Total)
+    // Asumimos que el precio base es Subtotal. Si tus precios ya incluyen IVA, ajusta la lógica.
+    const subtotal = Number(selectedPlan.price);
+    const iva = subtotal * 0.16;
+    const total = subtotal + iva;
 
-    if (!planId || !billingCycle || !userId) {
-        Alert.alert("Error", "Falta información del plan o del usuario.");
-        return;
-    }
+    // 3. Manejo del Pago
+    const handlePayment = async () => {
+        setIsLoading(true);
+        if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    setIsProcessing(true);
-    setShowProcessingModal(true);
+        try {
+            // Construimos el payload para tu backend
+            const paymentData = {
+                title: `Plan ${selectedPlan.name} (${selectedPlan.period === 'annually' ? 'Anual' : 'Mensual'})`,
+                quantity: 1,
+                price: total, // Enviamos el total ya con impuestos
+                planId: selectedPlan.planId, // ID del plan para referencia futura
+                billingCycle: selectedPlan.period
+            };
 
-    try {
-        // 2. Preparamos el payload completo, incluyendo 'payerInfo'
-        const nameParts = user.profile.name.split(' ');
-        const name = nameParts[0];
-        const surname = nameParts.slice(1).join(' ');
+            // Llamada al Endpoint existente
+            console.log('[Payment] Creando preferencia...', paymentData);
+            const response = await createPaymentPreference(paymentData);
 
-        const paymentData = {
-            planId: planId,
-            billingCycle: billingCycle,
-            userId: userId,
-            origin: 'mobile_app_onboarding', // <-- El identificador para el backend
-            payerInfo: {
-                email: user.profile.email,
-                name: name,
-                surname: surname
-            }
-        };
-        
-        // 3. Llamamos a la función de la API
-        const response = await createPaymentPreference(paymentData);
-
-        if (response.success && response.init_point) {
-            const paymentUrl = response.init_point;
-            const supported = await Linking.canOpenURL(paymentUrl);
-            
-            if (supported) {
-                await Linking.openURL(paymentUrl);
+            if (response.success && response.init_point) {
+                // Abrir Mercado Pago (Navegador o App)
+                const supported = await Linking.canOpenURL(response.init_point);
+                if (supported) {
+                    await Linking.openURL(response.init_point);
+                    // Opcional: Redirigir a una pantalla de "Esperando Confirmación" 
+                    // o esperar a que el Deep Link nos traiga de vuelta.
+                } else {
+                    Alert.alert("Error", "No se puede abrir el enlace de pago.");
+                }
             } else {
-                throw new Error(`No se puede abrir esta URL: ${paymentUrl}`);
+                throw new Error("No se recibió el link de pago.");
             }
-            
-            // 4. Pasamos el ID de NUESTRA compra (external_reference)
-            //    a la pantalla de éxito para que pueda verificar el estado.
-            navigation.navigate('PaymentSuccess', { 
-                selectedPlan: selectedPlan,
-                purchaseId: response.external_reference 
-            });
-        } else {
-            throw new Error(response.message || 'No se pudo obtener la URL de pago.');
+
+        } catch (error) {
+            console.error('[Payment] Error:', error);
+            Alert.alert("Error de Pago", "No pudimos iniciar el proceso de pago. Intenta de nuevo.");
+            if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        } finally {
+            setIsLoading(false);
         }
-    } catch (error) {
-        const errorMessage = error.message || 'Error al iniciar el proceso de pago.';
-        Alert.alert('Error en el pago', errorMessage);
-    } finally {
-        setIsProcessing(false);
-        setShowProcessingModal(false);
-    }
-};
-
-    const handleGoBack = async () => {
-        if (Platform.OS === 'ios') {
-            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        navigation.goBack();
     };
-
-    const showHelp = () => {
-        Alert.alert(
-            'Ayuda',
-            'Si tienes problemas con tu pago o necesitas asistencia, contacta nuestro soporte técnico.',
-            [
-                { 
-                    text: 'Contactar Soporte',
-                    onPress: () => {
-                        // Aquí podrías abrir chat, email o teléfono
-                        console.log('Abriendo soporte...');
-                    },
-                    style: 'default'
-                },
-                { text: 'Cerrar', style: 'cancel' }
-            ]
-        );
-    };
-
-    // Cálculos mejorados para el resumen
-    const isAnnual = selectedPlan.period === 'annually';
-    const discountPercent = isAnnual ? 0.15 : 0;
-    const subtotal = isAnnual ? Math.round(selectedPlan.price / (1 - discountPercent)) : selectedPlan.price;
-    const discount = subtotal - selectedPlan.price;
-    const monthlyEquivalent = isAnnual ? Math.round(selectedPlan.price / 12) : selectedPlan.price;
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="light-content" backgroundColor="#121212" translucent />
+            <StatusBar barStyle="light-content" backgroundColor="#000" />
             
-            <LinearGradient 
-                colors={['#1a1a1a', '#121212', '#0f0f0f']} 
-                locations={[0, 0.7, 1]}
-                style={styles.gradient}
-            >
-                {/* Header */}
-                <Animated.View 
-                    style={[
-                        styles.header,
-                        {
-                            opacity: headerFadeAnim,
-                            transform: [{ translateY: headerSlideAnim }]
-                        }
-                    ]}
-                >
-                    <TouchableOpacity 
-                        onPress={handleGoBack} 
-                        style={styles.backButton}
-                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        activeOpacity={0.7}
-                    >
-                        <Feather name="arrow-left" size={24} color="#FDB813" />
-                    </TouchableOpacity>
-                    
-                    <View style={styles.headerContent}>
-                        <Text style={styles.headerTitle}>Confirmar Compra</Text>
-                        <Text style={styles.headerSubtitle}>Revisa los detalles antes de proceder</Text>
-                    </View>
-                    
-                    <TouchableOpacity 
-                        style={styles.helpButton}
-                        onPress={showHelp}
-                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        activeOpacity={0.7}
-                    >
-                        <Feather name="help-circle" size={24} color="#A0A0A0" />
-                    </TouchableOpacity>
-                </Animated.View>
+            {/* Fondo Sutil */}
+            <LinearGradient colors={['#000000', '#111111']} style={StyleSheet.absoluteFillObject} />
 
-                <ScrollView 
-                    style={styles.scrollView}
-                    contentContainerStyle={styles.scrollContainer}
-                    showsVerticalScrollIndicator={false}
-                    bounces={true}
-                    keyboardShouldPersistTaps="handled"
-                >
-                    {/* Plan Seleccionado */}
-                    <PlanCard plan={selectedPlan} delay={200} />
+            {/* Header */}
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <Feather name="arrow-left" size={24} color="#FFF" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Resumen de Compra</Text>
+            </View>
 
-                    {/* Resumen de Costos */}
-                    <View style={styles.summaryCard}>
-                        <View style={styles.summaryHeader}>
-                            <MaterialCommunityIcons name="calculator" size={20} color="#FDB813" />
-                            <Text style={styles.summaryTitle}>Resumen de Pago</Text>
-                        </View>
-                        
-                        <AnimatedSummaryLineItem 
-                            label="Subtotal" 
-                            value={`$${subtotal.toLocaleString()}`}
-                            icon="tag"
-                            delay={400}
-                        />
-                        
-                        {discount > 0 && (
-                            <AnimatedSummaryLineItem 
-                                label={`Descuento Anual (${Math.round(discountPercent * 100)}%)`}
-                                value={`-$${discount.toLocaleString()}`}
-                                icon="percent"
-                                delay={500}
-                            />
-                        )}
-                        
-                        <AnimatedSummaryLineItem 
-                            label="Total a Pagar" 
-                            value={`$${selectedPlan.price.toLocaleString()}`}
-                            isTotal={true}
-                            icon="credit-card"
-                            delay={600}
-                        />
-                        
-                        {isAnnual && (
-                            <View style={styles.monthlyEquivalent}>
-                                <MaterialCommunityIcons name="calendar-month" size={16} color="#10B981" />
-                                <Text style={styles.monthlyEquivalentText}>
-                                    Equivale a ${monthlyEquivalent.toLocaleString()}/mes
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Método de Pago */}
-                    <PaymentMethodCard delay={700} />
-
-                    {/* Garantías */}
-                    <View style={styles.guaranteeCard}>
-                        <View style={styles.guaranteeHeader}>
-                            <MaterialCommunityIcons name="shield-star" size={20} color="#10B981" />
-                            <Text style={styles.guaranteeTitle}>Tu Compra Está Protegida</Text>
-                        </View>
-                        
-                        <View style={styles.guaranteeFeatures}>
-                            <View style={styles.guaranteeFeature}>
-                                <View style={styles.guaranteeFeatureIcon}>
-                                    <Feather name="refresh-cw" size={16} color="#10B981" />
-                                </View>
-                                <Text style={styles.guaranteeFeatureText}>
-                                    Garantía de devolución 30 días
-                                </Text>
-                            </View>
-                            <View style={styles.guaranteeFeature}>
-                                <View style={styles.guaranteeFeatureIcon}>
-                                    <Feather name="headphones" size={16} color="#10B981" />
-                                </View>
-                                <Text style={styles.guaranteeFeatureText}>
-                                    Soporte técnico incluido
-                                </Text>
-                            </View>
-                            <View style={styles.guaranteeFeature}>
-                                <View style={styles.guaranteeFeatureIcon}>
-                                    <Feather name="zap" size={16} color="#10B981" />
-                                </View>
-                                <Text style={styles.guaranteeFeatureText}>
-                                    Activación inmediata
-                                </Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.trustIndicators}>
-                            <View style={styles.trustIndicator}>
-                                <MaterialCommunityIcons name="bank" size={18} color="#FDB813" />
-                                <Text style={styles.trustIndicatorText}>Respaldado por bancos</Text>
-                            </View>
-                            <View style={styles.trustIndicator}>
-                                <MaterialCommunityIcons name="account-group" size={18} color="#FDB813" />
-                                <Text style={styles.trustIndicatorText}>+10,000 empresas confían</Text>
-                            </View>
-                        </View>
-                    </View>
-                </ScrollView>
+            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 
-                {/* Footer fijo con CTA */}
-                <View style={styles.footer}>
-                    <View style={styles.footerContent}>
-                        <Animated.View 
-                            style={[
-                                styles.buttonContainer,
-                                { transform: [{ scale: buttonScaleAnim }] }
-                            ]}
-                        >
-                            <TouchableOpacity
-                                style={[
-                                    styles.payButton,
-                                    isProcessing && styles.payButtonDisabled
-                                ]}
-                                onPress={handlePayment}
-                                disabled={isProcessing}
-                                activeOpacity={0.8}
-                            >
-                                <LinearGradient
-                                    colors={isProcessing ? ['#888', '#666'] : ['#FDB813', '#F59E0B']}
-                                    style={styles.payButtonGradient}
-                                >
-                                    <Animated.View
-                                        style={[
-                                            styles.buttonGlow,
-                                            {
-                                                opacity: buttonGlowAnim.interpolate({
-                                                    inputRange: [0, 1],
-                                                    outputRange: [0, 0.3],
-                                                }),
-                                            }
-                                        ]}
-                                    />
-                                    
-                                    {isProcessing ? (
-                                        <View style={styles.payButtonContent}>
-                                            <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
-                                            <Text style={styles.payButtonText}>Procesando...</Text>
-                                        </View>
-                                    ) : (
-                                        <View style={styles.payButtonContent}>
-                                            <MaterialCommunityIcons name="lock-check" size={20} color="#121212" />
-                                            <View style={styles.payButtonTextContainer}>
-                                                <Text style={styles.payButtonText}>Pagar Ahora</Text>
-                                                <Text style={styles.payButtonAmount}>
-                                                    ${selectedPlan.price.toLocaleString()}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    )}
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </Animated.View>
-                        
-                        <View style={styles.securityInfo}>
-                            <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
-                            <Text style={styles.securityText}>
-                                Transacción protegida con encriptación SSL de 256 bits
-                            </Text>
+                {/* 1. Tarjeta del Plan Seleccionado */}
+                <View style={styles.planCard}>
+                    <LinearGradient
+                        colors={['#1A1A1A', '#222']}
+                        style={styles.planCardGradient}
+                    >
+                        <View style={styles.planHeader}>
+                            <View style={styles.iconBox}>
+                                <MaterialCommunityIcons name="crown" size={24} color="#FDB813" />
+                            </View>
+                            <View>
+                                <Text style={styles.planLabel}>Plan Seleccionado</Text>
+                                <Text style={styles.planName}>{selectedPlan.name}</Text>
+                            </View>
                         </View>
+                        
+                        <View style={styles.divider} />
+                        
+                        <View style={styles.featuresList}>
+                            <View style={styles.featureItem}>
+                                <Feather name="calendar" size={16} color="#888" />
+                                <Text style={styles.featureText}>
+                                    Facturación: <Text style={{color:'#FFF'}}>{selectedPlan.period === 'annually' ? 'Anual' : 'Mensual'}</Text>
+                                </Text>
+                            </View>
+                            <View style={styles.featureItem}>
+                                <Feather name="check-circle" size={16} color="#888" />
+                                <Text style={styles.featureText}>
+                                    Acceso completo al Dashboard
+                                </Text>
+                            </View>
+                            {selectedPlan.timbres > 0 && (
+                                <View style={styles.featureItem}>
+                                    <Feather name="check-circle" size={16} color="#888" />
+                                    <Text style={styles.featureText}>
+                                        {selectedPlan.timbres} Timbres de facturación
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </LinearGradient>
+                </View>
+
+                {/* 2. Desglose de Precios (Recibo) */}
+                <View style={styles.receiptContainer}>
+                    <Text style={styles.sectionTitle}>Detalle del Pago</Text>
+                    
+                    <View style={styles.receiptBox}>
+                        <DetailRow label="Subtotal" value={`$${subtotal.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} />
+                        <DetailRow label="IVA (16%)" value={`$${iva.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} />
+                        
+                        <View style={styles.dividerLight} />
+                        
+                        <DetailRow 
+                            label="Total a Pagar" 
+                            value={`$${total.toLocaleString('es-MX', {minimumFractionDigits: 2})}`} 
+                            isTotal 
+                            color="#FDB813"
+                        />
                     </View>
                 </View>
-            </LinearGradient>
-            
-            {/* Modal de procesamiento */}
-            <ProcessingModal isVisible={showProcessingModal} />
+
+                {/* 3. Información de Seguridad */}
+                <SecurityBadge />
+
+                <Text style={styles.termsText}>
+                    Al continuar, aceptas que se realizará un cargo único o recurrente según el plan seleccionado. Puedes cancelar en cualquier momento.
+                </Text>
+
+            </ScrollView>
+
+            {/* Footer con Botón de Acción */}
+            <View style={styles.footer}>
+                <TouchableOpacity 
+                    style={[styles.payButton, isLoading && styles.buttonDisabled]} 
+                    onPress={handlePayment}
+                    disabled={isLoading}
+                    activeOpacity={0.9}
+                >
+                    <LinearGradient
+                        colors={['#009EE3', '#007eb5']} // Color azul Mercado Pago
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.buttonGradient}
+                    >
+                        {isLoading ? (
+                            <ActivityIndicator color="#FFF" />
+                        ) : (
+                            <>
+                                <Text style={styles.payButtonText}>Pagar con Mercado Pago</Text>
+                                <FontAwesome5 name="hand-holding-usd" size={20} color="#FFF" />
+                            </>
+                        )}
+                    </LinearGradient>
+                </TouchableOpacity>
+                <View style={styles.mpLogoContainer}>
+                    <Text style={styles.poweredBy}>Procesado por</Text>
+                    <FontAwesome5 name="store" size={12} color="#888" style={{marginLeft: 5, marginRight: 5}} /> 
+                    <Text style={[styles.poweredBy, {fontWeight: 'bold', color: '#009EE3'}]}>Mercado Pago</Text>
+                </View>
+            </View>
         </SafeAreaView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
-        backgroundColor: '#121212',
-    },
-    gradient: { 
+    container: {
         flex: 1,
+        backgroundColor: '#000',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 20,
-        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 20 : 60,
+        paddingTop: 10,
         paddingBottom: 20,
     },
-    backButton: { 
-        padding: 12,
-        borderRadius: 24,
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        borderWidth: 1,
-        borderColor: 'rgba(253, 184, 19, 0.2)',
-    },
-    headerContent: {
-        flex: 1,
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        justifyContent: 'center',
         alignItems: 'center',
-        marginHorizontal: 20,
+        marginRight: 15,
     },
-    headerTitle: { 
-        fontSize: 20, 
-        fontWeight: 'bold', 
-        color: '#FFFFFF',
-        textAlign: 'center',
+    headerTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: '#FFF',
     },
-    headerSubtitle: {
-        fontSize: 14,
-        color: '#A0A0A0',
-        textAlign: 'center',
-        marginTop: 4,
-    },
-    helpButton: {
-        padding: 8,
-    },
-    scrollView: {
-        flex: 1,
-    },
-    scrollContainer: { 
+    scrollContent: {
         paddingHorizontal: 20,
-        paddingBottom: 220,
+        paddingBottom: 120, // Espacio para el footer
     },
     
-    // Plan Card Styles
+    // Plan Card
     planCard: {
-        borderRadius: 20,
-        marginBottom: 16,
-    },
-    planBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
         borderRadius: 16,
+        overflow: 'hidden',
+        marginBottom: 30,
+        borderWidth: 1,
+        borderColor: 'rgba(253, 184, 19, 0.3)', // Borde sutil dorado
     },
-    planBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 11,
-        fontWeight: 'bold',
-        marginLeft: 6,
-        letterSpacing: 0.5,
+    planCardGradient: {
+        padding: 20,
     },
-    savingsBadge: {
-        backgroundColor: '#10B981',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
+    planHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 15,
+    },
+    iconBox: {
+        width: 48,
+        height: 48,
         borderRadius: 12,
-    },
-    savingsBadgeText: {
-        color: '#FFFFFF',
-        fontSize: 10,
-        fontWeight: 'bold',
-    },
-    planName: { 
-        color: '#FFFFFF', 
-        fontSize: 24, 
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginBottom: 4,
-    },
-    planPeriod: {
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: 16,
-        marginBottom: 16,
-        textAlign: 'center',
-    },
-    planPriceContainer: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
+        backgroundColor: 'rgba(253, 184, 19, 0.15)',
         justifyContent: 'center',
-        marginBottom: 12,
-    },
-    planCurrency: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#FFFFFF',
-    },
-    planPrice: {
-        fontSize: 36,
-        fontWeight: 'bold',
-        color: '#FFFFFF',
-        letterSpacing: -1,
-    },
-    planPeriodText: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginLeft: 4,
-    },
-    planHighlight: {
-        flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginTop: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.2)',
+        marginRight: 15,
     },
-    planHighlightText: {
-        color: '#10B981',
+    planLabel: {
+        color: '#888',
         fontSize: 12,
+        textTransform: 'uppercase',
         fontWeight: '600',
-        marginLeft: 8,
+        marginBottom: 2,
     },
-    
-    // Summary Card Styles
-    summaryCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
+    planName: {
+        color: '#FFF',
+        fontSize: 22,
+        fontWeight: 'bold',
     },
-    summaryHeader: {
+    divider: {
+        height: 1,
+        backgroundColor: 'rgba(255,255,255,0.1)',
+        marginVertical: 15,
+    },
+    featuresList: {
+        gap: 10,
+    },
+    featureItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 20,
+        gap: 10,
     },
-    summaryTitle: { 
-        color: '#FFFFFF', 
-        fontSize: 18, 
-        fontWeight: 'bold',
-        marginLeft: 12,
+    featureText: {
+        color: '#CCC',
+        fontSize: 14,
     },
-    summaryLine: { 
-        flexDirection: 'row', 
+
+    // Receipt
+    receiptContainer: {
+        marginBottom: 25,
+    },
+    sectionTitle: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: '600',
+        marginBottom: 15,
+    },
+    receiptBox: {
+        backgroundColor: '#1A1A1A',
+        borderRadius: 16,
+        padding: 20,
+    },
+    row: {
+        flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 12,
+        marginBottom: 12,
     },
-    summaryLabelContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
+    totalRow: {
+        marginTop: 5,
+        marginBottom: 0,
     },
-    summaryIcon: {
-        marginRight: 12,
+    rowLabel: {
+        color: '#888',
+        fontSize: 15,
     },
-    summaryLabel: { 
-        color: '#A0A0A0', 
-        fontSize: 16,
+    rowValue: {
+        color: '#FFF',
+        fontSize: 15,
         fontWeight: '500',
     },
-    summaryValue: { 
-        color: '#FFFFFF', 
-        fontSize: 16, 
+    boldText: {
         fontWeight: '600',
+        color: '#FFF',
     },
-    summaryTotalLine: { 
-        borderTopWidth: 1, 
-        borderTopColor: 'rgba(255, 255, 255, 0.1)', 
-        marginTop: 12, 
-        paddingTop: 16,
-        backgroundColor: 'rgba(253, 184, 19, 0.05)',
-        marginHorizontal: -12,
-        paddingHorizontal: 12,
-        borderRadius: 12,
+    totalText: {
+        fontSize: 20,
+        fontWeight: 'bold',
     },
-    summaryTotalLabel: { 
-        fontWeight: 'bold', 
-        color: '#FDB813',
-        fontSize: 17,
+    dividerLight: {
+        height: 1,
+        backgroundColor: '#333',
+        marginVertical: 15,
+        borderStyle: 'dashed', // Estilo ticket si fuera soportado, en RN nativo necesita librería svg, usamos linea
     },
-    summaryTotalValue: { 
-        fontWeight: 'bold', 
-        color: '#FDB813',
-        fontSize: 18,
-    },
-    monthlyEquivalent: {
+
+    // Security
+    securityContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
+        padding: 12,
         borderRadius: 12,
-        marginTop: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.2)',
+        marginBottom: 20,
+        gap: 8,
     },
-    monthlyEquivalentText: {
+    securityText: {
         color: '#10B981',
-        fontSize: 14,
-        fontWeight: '600',
-        marginLeft: 8,
-    },
-    
-    // Payment Method Card Styles
-    paymentMethodCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    paymentMethodHeader: {
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    securePaymentBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.2)',
-    },
-    securePaymentText: {
-        color: '#10B981',
-        fontSize: 12,
-        fontWeight: 'bold',
-        marginLeft: 8,
-        letterSpacing: 0.5,
-    },
-    paymentMethodContainer: { 
-        alignItems: 'center', 
-        paddingVertical: 20,
-        marginBottom: 20,
-    },
-    paymentLogo: { 
-        width: 180, 
-        height: 50,
-        marginBottom: 12,
-    },
-    paymentMethodDescription: {
-        color: '#A0A0A0',
-        fontSize: 14,
-        textAlign: 'center',
-        lineHeight: 20,
-    },
-    paymentFeatures: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingTop: 20,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    paymentFeature: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    paymentFeatureText: {
-        color: '#A0A0A0',
-        fontSize: 12,
-        textAlign: 'center',
-        marginTop: 8,
-        lineHeight: 16,
-    },
-
-    // Guarantee Card Styles
-    guaranteeCard: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    guaranteeHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    guaranteeTitle: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginLeft: 12,
-    },
-    guaranteeFeatures: {
-        marginBottom: 20,
-    },
-    guaranteeFeature: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        backgroundColor: 'rgba(16, 185, 129, 0.05)',
-        borderRadius: 12,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.1)',
-    },
-    guaranteeFeatureIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: 'rgba(16, 185, 129, 0.2)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: 16,
-    },
-    guaranteeFeatureText: {
-        color: '#FFFFFF',
-        fontSize: 14,
+        fontSize: 13,
         fontWeight: '500',
-        flex: 1,
-        lineHeight: 20,
     },
-    trustIndicators: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        paddingTop: 20,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    trustIndicator: {
-        alignItems: 'center',
-        flex: 1,
-    },
-    trustIndicatorText: {
-        color: '#FDB813',
+    termsText: {
+        color: '#666',
         fontSize: 12,
-        fontWeight: '600',
         textAlign: 'center',
-        marginTop: 8,
-        lineHeight: 16,
+        lineHeight: 18,
+        marginBottom: 20,
     },
 
-    // Footer Styles
+    // Footer
     footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(18, 18, 18, 0.95)',
-        backdropFilter: 'blur(20px)',
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    footerContent: {
+        backgroundColor: '#111',
         paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    },
-    buttonContainer: {
-        marginBottom: 16,
+        paddingTop: 15,
+        paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+        borderTopWidth: 1,
+        borderTopColor: '#222',
     },
     payButton: {
-        borderRadius: 16,
+        borderRadius: 12,
         overflow: 'hidden',
-        shadowColor: '#FDB813',
-        shadowOffset: {
-            width: 0,
-            height: 8,
-        },
+        height: 56,
+        marginBottom: 10,
+        shadowColor: "#009EE3",
+        shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
-        shadowRadius: 16,
-        elevation: 16,
+        shadowRadius: 10,
+        elevation: 5,
     },
-    payButtonDisabled: {
-        shadowOpacity: 0.1,
-        shadowColor: '#888',
+    buttonDisabled: {
+        opacity: 0.7,
     },
-    payButtonGradient: {
-        paddingVertical: 20,
-        paddingHorizontal: 24,
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-    },
-    buttonGlow: {
-        position: 'absolute',
-        top: -2,
-        left: -2,
-        right: -2,
-        bottom: -2,
-        backgroundColor: '#FDB813',
-        borderRadius: 18,
-        zIndex: -1,
-    },
-    payButtonContent: {
+    buttonGradient: {
+        flex: 1,
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-    },
-    payButtonTextContainer: {
         alignItems: 'center',
-        marginLeft: 12,
+        gap: 10,
     },
     payButtonText: {
-        color: '#121212',
+        color: '#FFF',
         fontSize: 18,
         fontWeight: 'bold',
-        letterSpacing: 0.5,
     },
-    payButtonAmount: {
-        color: '#121212',
-        fontSize: 14,
-        fontWeight: '600',
-        opacity: 0.8,
-        marginTop: 2,
-    },
-    securityInfo: {
+    mpLogoContainer: {
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 16,
+        alignItems: 'center',
     },
-    securityText: {
-        color: '#A0A0A0',
+    poweredBy: {
+        color: '#666',
         fontSize: 12,
-        textAlign: 'center',
-        marginLeft: 8,
-        lineHeight: 16,
-    },
-
-    // Processing Modal Styles
-    modalOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-    },
-    processingModal: {
-        width: screenWidth * 0.85,
-        maxWidth: 320,
-        borderRadius: 24,
-        overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 20,
-        },
-        shadowOpacity: 0.5,
-        shadowRadius: 30,
-        elevation: 30,
-    },
-    processingModalContent: {
-        padding: 32,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-    },
-    loadingSpinner: {
-        marginBottom: 24,
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: 'rgba(253, 184, 19, 0.1)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    processingTitle: {
-        color: '#FFFFFF',
-        fontSize: 20,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginBottom: 12,
-    },
-    processingText: {
-        color: '#A0A0A0',
-        fontSize: 14,
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 24,
-    },
-    processingSteps: {
-        alignSelf: 'stretch',
-    },
-    processingStep: {
-        color: '#10B981',
-        fontSize: 12,
-        marginBottom: 8,
-        paddingLeft: 8,
-        lineHeight: 18,
-    },
+    }
 });
 
 export default PaymentGatewayScreen;
