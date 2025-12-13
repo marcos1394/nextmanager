@@ -1,59 +1,34 @@
+import 'react-native-gesture-handler'; // IMPORTANTE: Debe ser la 1ra línea siempre para que funcione el Menú Lateral
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // --- IMPORTACIONES DE CONTEXTO ---
-// 1. Importa tu AuthProvider
 import { AuthProvider } from './src/context/AuthContext';
-// (Si tienes un ThemeProvider, también iría aquí)
-// import { ThemeProvider } from './src/context/ThemeContext';
 
-// Tus pantallas existentes
-import LandingPage from './src/screens/LandingPage';
-import Login from './src/screens/LoginScreen';
-import Register from './src/screens/RegisterScreen';
-import Monitor from './src/screens/MonitorScreen';
-import Report from './src/screens/ReportScreen';
-
-// Nuevas pantallas agregadas
-import PlanSelection from './src/screens/PlanSelection';
-import PaymentScreen from './src/screens/PaymentScreen';
-import PaymentSuccess from './src/screens/PaymentSuccess';
-import PaymentPending from './src/screens/PaymentPending';
-import PaymentFailure from './src/screens/PaymentFailure';
-// (Aquí también faltarían tus otras pantallas como RestaurantConfig, HelpCenter, etc.)
-
-const Stack = createStackNavigator();
+// --- IMPORTACIÓN DE NAVEGACIÓN PRINCIPAL ---
+// Ya no importamos las pantallas aquí una por una. 
+// AppNavigator se encarga de decidir si mostrar Login o el Dashboard.
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      {/*
-        2. Envuelve toda tu aplicación con el AuthProvider.
-           Esto "inyecta" el estado (user, login, logout) a todos los
-           componentes hijos (incluyendo toda la navegación).
+      {/* AuthProvider debe envolver a la navegación para que 
+        todas las pantallas tengan acceso al usuario y al token.
       */}
       <AuthProvider>
-        {/* Si tienes un ThemeProvider, iría aquí, dentro de AuthProvider */}
-        <NavigationContainer>
-          <Stack.Navigator initialRouteName="LandingPage" screenOptions={{ headerShown: false }}>
-            {/* Pantallas existentes */}
-            <Stack.Screen name="LandingPage" component={LandingPage} />
-            <Stack.Screen name="Login" component={Login} />
-            <Stack.Screen name="Register" component={Register} />
-            <Stack.Screen name="Monitor" component={Monitor} />
-            <Stack.Screen name="Report" component={Report} />
+        
+        {/* Configuración global de la barra de estado (Estilo Dark Mode) */}
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-            {/* NUEVAS pantallas según la lógica creada */}
-            <Stack.Screen name="Plans" component={PlanSelection} />
-            <Stack.Screen name="Payment" component={PaymentScreen} />
-            <Stack.Screen name="PaymentSuccess" component={PaymentSuccess} />
-            <Stack.Screen name="PaymentPending" component={PaymentPending} />
-            <Stack.Screen name="PaymentFailure" component={PaymentFailure} />
-            
-          </Stack.Navigator>
-        </NavigationContainer>
+        {/* El Navegador Principal. 
+          Aquí dentro vive la lógica de:
+          - Si no hay usuario -> Muestra Landing/Login/Register
+          - Si hay usuario -> Muestra el Menú Lateral (Drawer) y Monitor
+        */}
+        <AppNavigator />
+
       </AuthProvider>
     </SafeAreaProvider>
   );
