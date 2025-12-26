@@ -9,7 +9,8 @@ import {
     Dimensions,
     ScrollView,
     BackHandler,
-    Linking
+    Linking,
+    Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, CommonActions } from '@react-navigation/native';
