@@ -1,35 +1,32 @@
-import 'react-native-gesture-handler'; // IMPORTANTE: Debe ser la 1ra línea siempre para que funcione el Menú Lateral
+import 'react-native-gesture-handler'; // 1. IMPORTANTE: Primera línea siempre
 import React from 'react';
 import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+// 2. IMPORTANTE: Necesitamos importar este componente contenedor
+import { GestureHandlerRootView } from 'react-native-gesture-handler'; 
 
 // --- IMPORTACIONES DE CONTEXTO ---
 import { AuthProvider } from './src/context/AuthContext';
 
 // --- IMPORTACIÓN DE NAVEGACIÓN PRINCIPAL ---
-// Ya no importamos las pantallas aquí una por una. 
-// AppNavigator se encarga de decidir si mostrar Login o el Dashboard.
 import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      {/* AuthProvider debe envolver a la navegación para que 
-        todas las pantallas tengan acceso al usuario y al token.
-      */}
-      <AuthProvider>
-        
-        {/* Configuración global de la barra de estado (Estilo Dark Mode) */}
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
+    // 3. IMPORTANTE: Envolvemos TODA la app en GestureHandlerRootView con flex: 1
+    // Sin esto, el Menú Lateral (Drawer) provoca pantalla blanca o no responde en Android.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          
+          {/* Configuración global de la barra de estado (Estilo Dark Mode) */}
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-        {/* El Navegador Principal. 
-          Aquí dentro vive la lógica de:
-          - Si no hay usuario -> Muestra Landing/Login/Register
-          - Si hay usuario -> Muestra el Menú Lateral (Drawer) y Monitor
-        */}
-        <AppNavigator />
+          {/* El Navegador Principal */}
+          <AppNavigator />
 
-      </AuthProvider>
-    </SafeAreaProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
