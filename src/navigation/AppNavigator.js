@@ -59,8 +59,15 @@ const PaymentStack = () => {
 // 3. Drawer Principal (Menú Lateral)
 const MainDrawer = () => {
     return (
-        <Drawer.Navigator
+       <Drawer.Navigator
+            // 1. IMPORTANTE: Esta propiedad va AQUÍ, como atributo directo, con signo de IGUAL (=).
+            // Esto desactiva la implementación vieja que choca con Reanimated 3.
+            useLegacyImplementation={false} 
+
+            // 2. Aquí pasamos tu componente personalizado
             drawerContent={(props) => <CustomDrawer {...props} />}
+            
+            // 3. Las opciones visuales van AQUÍ dentro (con dos puntos :)
             screenOptions={{
                 headerShown: false, // Ocultamos el header default
                 drawerActiveBackgroundColor: 'rgba(253, 184, 19, 0.15)', // Fondo dorado suave activo

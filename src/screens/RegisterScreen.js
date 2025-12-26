@@ -152,49 +152,53 @@ const RegisterScreen = () => {
     };
 
     const handleRegister = async () => {
-        if (!validate()) {
-            if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            return;
+    if (!validate()) {
+        if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+    }
+
+    setIsLoading(true);
+    setErrors({}); 
+
+    try {
+        const payload = {
+            name: formData.name,
+            email: formData.email.toLowerCase().trim(),
+            password: formData.password,
+            restaurantName: formData.restaurantName,
+            phoneNumber: ''
+        };
+
+        // 1. Esto actualiza el estado global 'isAuthenticated' a true
+        await register(payload);
+
+        if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // 2. ELIMINA ESTA LÍNEA:
+        // navigation.replace('Plans');  <-- BORRAR ESTO CAUSA EL ERROR
+        
+        // No necesitamos hacer nada más. 
+        // El AppNavigator detectará el cambio de usuario y cambiará la pantalla solo.
+
+    } catch (error) {
+        // Logs limpios para sistema
+        console.log('[RegisterSystem] Error:', error.message);
+
+        let userMessage = 'Ocurrió un problema inesperado. Por favor intenta de nuevo.';
+        
+        if (error.response?.status === 409) {
+            userMessage = 'Este correo ya está registrado. Intenta iniciar sesión.';
+        } else if (error.response?.data?.message) {
+            userMessage = error.response.data.message;
         }
 
-        setIsLoading(true);
-        setErrors({}); 
-
-        try {
-            const payload = {
-                name: formData.name,
-                email: formData.email.toLowerCase().trim(),
-                password: formData.password,
-                restaurantName: formData.restaurantName,
-                phoneNumber: ''
-            };
-
-            await register(payload);
-
-            if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            
-            // Navegamos directamente. No desactivamos loading para evitar parpadeos
-            navigation.replace('Plans');
-
-        } catch (error) {
-            // Logs limpios para sistema
-            console.log('[RegisterSystem] Error:', error.message);
-
-            let userMessage = 'Ocurrió un problema inesperado. Por favor intenta de nuevo.';
-            
-            if (error.response?.status === 409) {
-                userMessage = 'Este correo ya está registrado. Intenta iniciar sesión.';
-            } else if (error.response?.data?.message) {
-                userMessage = error.response.data.message;
-            }
-
-            Alert.alert('Atención', userMessage);
-            
-            if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            
-            setIsLoading(false);
-        }
-    };
+        Alert.alert('Atención', userMessage);
+        
+        if (Platform.OS === 'ios') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        
+        setIsLoading(false);
+    }
+};
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
