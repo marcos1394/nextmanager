@@ -2,36 +2,62 @@ import React from 'react';
 import {
     View,
     Text,
-    Image,
     TouchableOpacity,
     StyleSheet,
     Dimensions
 } from 'react-native';
 import {
     DrawerContentScrollView,
-    DrawerItemList,
-    DrawerItem
+    DrawerItemList
 } from '@react-navigation/drawer';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+// --- IMPORTACIONES REANIMATED V3 (CORREGIDAS) ---
+import Animated, { 
+    useAnimatedStyle, 
+    interpolate, 
+    Extrapolation 
+} from 'react-native-reanimated';
+
 const { width } = Dimensions.get('window');
 
 const CustomDrawer = (props) => {
     const { user, logout } = useAuth();
     const insets = useSafeAreaInsets();
+    
+    // Extraemos el progreso de la animación del Drawer (viene en las props)
+    const { progress } = props;
+
+    // --- LÓGICA DE ANIMACIÓN V3 ---
+    // Esto mueve los items del menú suavemente de izquierda a derecha al abrir
+    const animatedMenuStyles = useAnimatedStyle(() => {
+        const translateX = interpolate(
+            progress.value, 
+            [0, 1], 
+            [-30, 0], // Se desliza 30px desde la izquierda
+            Extrapolation.CLAMP
+        );
+
+        return {
+            transform: [{ translateX }],
+            opacity: progress.value, // Aparece con opacidad
+        };
+    });
 
     const handleLogout = async () => {
         await logout();
-        // La navegación se maneja automáticamente en AppNavigator al cambiar el estado de auth
+        // La navegación se maneja automáticamente en AppNavigator
     };
 
-    // Obtenemos el nombre del restaurante o del usuario
+    // Datos del usuario con Fallbacks seguros
     const restaurantName = user?.restaurants?.[0]?.name || 'Mi Restaurante';
     const userName = user?.name || 'Administrador';
-    const userEmail = user?.email || '';
+    
+    // Lógica para el badge del plan
+    const planName = user?.plan ? 'Premium' : 'Free Trial';
 
     return (
         <View style={{ flex: 1, backgroundColor: '#000' }}>
@@ -68,16 +94,17 @@ const CustomDrawer = (props) => {
                         <View style={styles.planBadge}>
                             <MaterialCommunityIcons name="crown" size={12} color="#000" />
                             <Text style={styles.planText}>
-                                {user?.plan?.name || 'Free Trial'}
+                                {planName}
                             </Text>
                         </View>
                     </View>
                 </View>
 
-                {/* --- LISTA DE NAVEGACIÓN --- */}
-                <View style={styles.menuContainer}>
+                {/* --- LISTA DE NAVEGACIÓN ANIMADA --- */}
+                {/* Usamos Animated.View para aplicar el estilo de Reanimated 3 */}
+                <Animated.View style={[styles.menuContainer, animatedMenuStyles]}>
                     <DrawerItemList {...props} />
-                </View>
+                </Animated.View>
 
             </DrawerContentScrollView>
 
@@ -85,7 +112,8 @@ const CustomDrawer = (props) => {
             <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
                 <View style={styles.divider} />
                 
-                <TouchableOpacity onPress={() => {}} style={styles.footerItem}>
+                {/* Botón Fake de Configuración (Visual) */}
+                <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.footerItem}>
                     <Feather name="settings" size={20} color="#888" />
                     <Text style={styles.footerText}>Configuración</Text>
                 </TouchableOpacity>
