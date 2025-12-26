@@ -19,7 +19,7 @@ import { Feather, MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { getHelpCenterContent, searchHelpArticles } from '../services/api';
 import { useDebounce } from '../hooks/useDebounce'; // Asegúrate de tener este hook
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../context/AuthContext'; // <--- CORREGIDO: Viene de context
 
 const { width } = Dimensions.get('window');
 
@@ -434,7 +434,7 @@ const HelpCenterScreen = ({ navigation }) => {
         
         fetchSearch();
     }, [debouncedSearch]); // Se ejecuta cada vez que el usuario deja de teclear
-    
+
     const handleCategoryPress = (category) => {
         if (Platform.OS === 'ios') {
             const { impactAsync, ImpactFeedbackStyle } = require('expo-haptics');
