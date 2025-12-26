@@ -5,16 +5,22 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { NavigationContainer } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
-// --- TUS PANTALLAS ---
+// --- TUS PANTALLAS (Importaciones coincidentes con tu directorio) ---
 import LandingPage from '../screens/LandingPage';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import MonitorScreen from '../screens/MonitorScreen';
-import PlanSelectionScreen from '../screens/PlanSelectionScreen';
-import PaymentGatewayScreen from '../screens/PaymentGatewayScreen';
-import PaymentSuccessScreen from '../screens/PaymentSuccessScreen';
-import PaymentPendingScreen from '../screens/PaymentPendingScreen';
-import PaymentFailureScreen from '../screens/PaymentFailureScreen';
+
+// Pantallas de Pago (Nombres de archivo reales)
+import PlanSelectionScreen from '../screens/PlanSelection';     // Archivo: PlanSelection.js
+import PaymentGatewayScreen from '../screens/PaymentScreen';    // Archivo: PaymentScreen.js
+import PaymentSuccessScreen from '../screens/PaymentSuccess';   // Archivo: PaymentSuccess.js
+import PaymentPendingScreen from '../screens/PaymentPending';   // Archivo: PaymentPending.js
+import PaymentFailureScreen from '../screens/PaymentFailure';   // Archivo: PaymentFailure.js
+
+// Pantallas Adicionales (Detectadas en tu directorio)
+import HelpCenterScreen from '../screens/HelpCenterScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 // Componente del Menú Lateral
 import CustomDrawer from '../components/CustomDrawer';
@@ -40,6 +46,7 @@ const AuthStack = () => {
 const PaymentStack = () => {
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
+            {/* OJO: El componente es PlanSelectionScreen, pero viene del archivo PlanSelection.js */}
             <Stack.Screen name="PlansList" component={PlanSelectionScreen} />
             <Stack.Screen name="Payment" component={PaymentGatewayScreen} />
             <Stack.Screen name="PaymentSuccess" component={PaymentSuccessScreen} />
@@ -55,16 +62,16 @@ const MainDrawer = () => {
         <Drawer.Navigator
             drawerContent={(props) => <CustomDrawer {...props} />}
             screenOptions={{
-                headerShown: false, // Ocultamos el header default porque MonitorScreen tiene el suyo animado
-                drawerActiveBackgroundColor: 'rgba(253, 184, 19, 0.15)', // Fondo dorado suave al estar activo
-                drawerActiveTintColor: '#FDB813', // Texto dorado al estar activo
+                headerShown: false, // Ocultamos el header default
+                drawerActiveBackgroundColor: 'rgba(253, 184, 19, 0.15)', // Fondo dorado suave activo
+                drawerActiveTintColor: '#FDB813', // Texto dorado activo
                 drawerInactiveTintColor: '#A0A0A0', // Texto gris inactivo
                 drawerLabelStyle: { marginLeft: -20, fontSize: 15, fontWeight: '500' },
                 drawerStyle: {
                     backgroundColor: '#000',
                     width: 300,
                 },
-                swipeEdgeWidth: 100, // Facilita abrir el menú deslizando
+                swipeEdgeWidth: 100,
             }}
         >
             <Drawer.Screen 
@@ -85,10 +92,18 @@ const MainDrawer = () => {
                 }}
             />
 
-            {/* Puedes agregar más pantallas aquí en el futuro */}
+            <Drawer.Screen 
+                name="Settings" 
+                component={SettingsScreen} 
+                options={{
+                    drawerIcon: ({ color }) => <Feather name="settings" size={22} color={color} />,
+                    title: 'Configuración'
+                }}
+            />
+
             <Drawer.Screen 
                 name="Help" 
-                component={MonitorScreen} // Placeholder: Cambiar por HelpScreen cuando exista
+                component={HelpCenterScreen} 
                 options={{
                     drawerIcon: ({ color }) => <Feather name="help-circle" size={22} color={color} />,
                     title: 'Centro de Ayuda'
