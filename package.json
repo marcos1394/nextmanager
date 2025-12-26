@@ -19,6 +19,7 @@
     "@stripe/stripe-react-native": "0.38.6",
     "axios": "^1.11.0",
     "expo": "^54.0.0",
+    "expo-blur": "~15.0.8",
     "expo-build-properties": "~0.13.1",
     "expo-dev-client": "~5.0.6",
     "expo-haptics": "~14.0.1",
