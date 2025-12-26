@@ -27,6 +27,7 @@
     "expo-status-bar": "~1.12.1",
     "expo-updates": "~0.26.0",
     "framer-motion": "^12.19.2",
+    "fs-extra": "^11.3.3",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-native": "0.76.0",
