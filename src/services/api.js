@@ -12,6 +12,19 @@ const api = axios.create({
     },
 });
 
+// Variables para manejar colas de peticiones cuando el token expira
+let isRefreshingToken = false;
+let refreshSubscribers = [];
+
+const subscribeTokenRefresh = (cb) => {
+    refreshSubscribers.push(cb);
+};
+
+const onRefreshed = (accessToken) => {
+    refreshSubscribers.map(cb => cb(accessToken));
+    refreshSubscribers = [];
+};
+
 // ------------------------------------------------------------------
 // --- LOGGING DE SISTEMA (INTERCEPTORES) ---
 // ------------------------------------------------------------------
@@ -64,6 +77,19 @@ api.interceptors.response.use(
         // --- LÓGICA DE REFRESH TOKEN ---
         if (isRetryable) {
             originalRequest._retry = true;
+            
+            // Si ya estamos renovando el token, encoframos la petición en la cola
+            if (isRefreshingToken) {
+                return new Promise((resolve) => {
+                    subscribeTokenRefresh((newToken) => {
+                        originalRequest.headers['Authorization'] = newToken;
+                        resolve(api(originalRequest));
+                    });
+                });
+            }
+
+            isRefreshingToken = true;
+            
             try {
                 // Log informativo de sistema (no es un error)
                 console.log('[System] 🔄 Token expirado. Renovando sesión...');
@@ -71,6 +97,7 @@ api.interceptors.response.use(
                 const refreshToken = await SecureStore.getItemAsync('refreshToken');
                 if (!refreshToken) {
                     console.log('[System] ⚠️ No hay refresh token. Cerrando sesión.');
+                    isRefreshingToken = false;
                     return Promise.reject(error);
                 }
 
@@ -87,6 +114,9 @@ api.interceptors.response.use(
 
                 console.log('[System] ✅ Sesión renovada. Reintentando petición original.');
                 
+                isRefreshingToken = false;
+                onRefreshed(accessToken); // Despacha las peticiones encoladas
+                
                 // Reintentamos la petición original
                 return api(originalRequest);
 
@@ -97,6 +127,7 @@ api.interceptors.response.use(
                 await SecureStore.deleteItemAsync('accessToken');
                 await SecureStore.deleteItemAsync('refreshToken');
                 
+                isRefreshingToken = false;
                 return Promise.reject(refreshError);
             }
         }

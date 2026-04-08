@@ -20,9 +20,10 @@ export const AuthProvider = ({ children }) => {
             throw new Error("Respuesta de autenticación inválida.");
         }
 
-        // 1. Guardamos ambos tokens
+        // 1. Guardamos ambos tokens y los datos básicos del usuario
         await SecureStore.setItemAsync('accessToken', accessToken);
         await SecureStore.setItemAsync('refreshToken', refreshToken);
+        await SecureStore.setItemAsync('userData', JSON.stringify(user));
         
         // 2. Actualizamos la instancia de API
         api.defaults.headers.common['Authorization'] = accessToken;
@@ -47,15 +48,31 @@ export const AuthProvider = ({ children }) => {
             const response = await getAccountDetails(); 
             
             if (response.success) {
+                // Sincronizar el caché fresco
+                await SecureStore.setItemAsync('userData', JSON.stringify(response.data));
                 setUser(response.data);
-                return response.data; // <-- CORRECCIÓN: Devolvemos los datos
+                return response.data; 
             } else {
                 setUser(null);
                 return null;
             }
         } catch (error) {
             console.error("Fallo la verificación de la sesión:", error.message);
-            // Si falla (y el refresh token también falla), limpiamos el usuario
+            // Si es un error de red (no es un 401 fatal), intentar usar el caché
+            if (error?.message !== 'Error al obtener los detalles de la cuenta.' && !error?.statusCode) {
+                try {
+                    const cachedUser = await SecureStore.getItemAsync('userData');
+                    if (cachedUser) {
+                        const parsedUser = JSON.parse(cachedUser);
+                        setUser(parsedUser);
+                        console.log('[AuthContext] Usando caché local temporal por falla de red.');
+                        return parsedUser;
+                    }
+                } catch (cacheError) {
+                    console.log('Error leyendo caché:', cacheError);
+                }
+            }
+            // Si falla y no hay caché (y el refresh token falló), limpiamos el usuario
             setUser(null);
             return null;
         } finally {
@@ -86,20 +103,9 @@ export const AuthProvider = ({ children }) => {
                 throw new Error('Error al verificar el perfil del usuario.');
             }
 
-            // 4. Lógica de Redirección Inteligente
-            // Caso A: Sin plan
-            if (!userData.plan?.name || userData.plan.name === 'Sin Plan Activo') {
-                return '/plans';
-            }
-            
-            // Caso B: Con plan pero sin configurar (En mobile esto va al dashboard igual)
-            if (!userData.restaurants || userData.restaurants.length === 0) {
-                // return '/restaurant-config'; // En web iríamos aquí
-                return '/dashboard'; // En mobile vamos directo al dashboard
-            }
-            
-            // Caso C: Todo listo
-            return '/dashboard';
+            // Ya no regresamos strings mágicos para la navegación. 
+            // AppNavigator se encargará automáticamente observando el estado de autenticación.
+            return userData;
 
         } catch (error) {
             await logout(); 
@@ -134,6 +140,7 @@ export const AuthProvider = ({ children }) => {
         
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
+        await SecureStore.deleteItemAsync('userData');
         delete api.defaults.headers.common['Authorization'];
         setUser(null);
     };

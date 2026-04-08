@@ -18,17 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-
-// --- DATOS DE MUESTRA MEJORADOS ---
-const mockUser = {
-    name: 'Carlos Mendoza',
-    email: 'carlos.mendoza@elsazon.com',
-    role: 'Administrador',
-    avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=300&auto=format&fit=crop',
-    isVerified: true,
-    planType: 'Premium',
-    joinDate: 'Miembro desde Mar 2024'
-};
+import { useAuth } from '../context/AuthContext';
 
 // --- COMPONENTES MEJORADOS ---
 const AnimatedSection = ({ children, delay = 0 }) => {
@@ -289,10 +279,22 @@ const QuickActions = () => {
  * 6. **Jerarquía Visual**: Tipografía mejorada y espaciado consistente
  */
 const SettingsScreen = () => {
+    const { user, logout } = useAuth();
     const navigation = useNavigation();
     const [darkMode, setDarkMode] = useState(true);
     const [notifications, setNotifications] = useState(true);
     const [biometric, setBiometric] = useState(false);
+
+    // Mapeo seguro de datos del usuario real (o fallbacks atractivos)
+    const uiUser = {
+        name: user?.name || 'Administrador',
+        email: user?.email || 'admin@nextmanager.app',
+        role: user?.restaurants?.[0]?.name ? `Sucursal ${user.restaurants[0].name}` : 'Admin de Franquicia',
+        avatarUrl: user?.avatarUrl || 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=300&auto=format&fit=crop',
+        isVerified: true,
+        planType: user?.plan?.name || 'No Activo',
+        joinDate: 'Suscripción Activa'
+    };
 
     const handleLogout = () => {
         Alert.alert(
@@ -303,9 +305,8 @@ const SettingsScreen = () => {
                 { 
                     text: 'Cerrar Sesión', 
                     style: 'destructive',
-                    onPress: () => {
-                        // Lógica de cierre de sesión
-                        console.log('Cerrando sesión...');
+                    onPress: async () => {
+                        await logout();
                     }
                 }
             ]
@@ -337,7 +338,7 @@ const SettingsScreen = () => {
                     showsVerticalScrollIndicator={false}
                 >
                     {/* Profile Header */}
-                    <ProfileHeader user={mockUser} />
+                    <ProfileHeader user={uiUser} />
 
                     {/* Quick Actions */}
                     <QuickActions />

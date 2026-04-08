@@ -2,6 +2,7 @@
   "expo": {
     "name": "NextManager",
     "slug": "nextmanager",
+    "scheme": "nextmanager",
     "owner": "qubitslmwork",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +18,7 @@
     },
     "android": {
       "minSdkVersion": 23,
-      "targetSdkVersion": 33,
+      "targetSdkVersion": 34, 
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -28,14 +29,21 @@
       "favicon": "./assets/favicon.png"
     },
 
-       "runtimeVersion": "1.0.0", 
+    "runtimeVersion": "1.0.0", 
 
     "updates": {
       "url": "https://u.expo.dev/8387b113-b372-4944-8b0e-8c1c65945631"
     },
 
     "plugins": [
-      "expo-build-properties"
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.0.0"
+          }
+        }
+      ]
     ],
 
     "extra": {

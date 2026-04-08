@@ -4,6 +4,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { NavigationContainer } from '@react-navigation/native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 
 // --- TUS PANTALLAS (Importaciones coincidentes con tu directorio) ---
 import LandingPage from '../screens/LandingPage';
@@ -58,8 +59,12 @@ const PaymentStack = () => {
 
 // 3. Drawer Principal (Menú Lateral)
 const MainDrawer = () => {
+    const { user } = useAuth();
+    const initialRoute = (!user?.plan?.name || user.plan.name === 'Sin Plan Activo') ? 'Plans' : 'Monitor';
+
     return (
        <Drawer.Navigator
+            initialRouteName={initialRoute}
             // 1. IMPORTANTE: Esta propiedad va AQUÍ, como atributo directo, con signo de IGUAL (=).
             // Esto desactiva la implementación vieja que choca con Reanimated 3.
             useLegacyImplementation={false} 
@@ -124,6 +129,25 @@ const MainDrawer = () => {
 const AppNavigator = () => {
     const { isAuthenticated, isLoading } = useAuth();
 
+    // --- CONFIGURACIÓN DE DEEP LINKING (MERCADO PAGO) ---
+    const prefix = Linking.createURL('/');
+    
+    const linkingConfig = {
+        prefixes: [prefix, 'nextmanager://', 'https://nextmanager.app'],
+        config: {
+            // Cuando estemos autenticados, MainDrawer está activo
+            screens: {
+                Plans: { // El nombre del Drawer.Screen que monta PaymentStack
+                    screens: {
+                        PaymentSuccess: 'payment-success',
+                        PaymentPending: 'payment-pending',
+                        PaymentFailure: 'payment-failure'
+                    }
+                }
+            }
+        }
+    };
+
     if (isLoading) {
         return (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
@@ -133,7 +157,7 @@ const AppNavigator = () => {
     }
 
     return (
-        <NavigationContainer>
+        <NavigationContainer linking={linkingConfig}>
             {isAuthenticated ? (
                 <MainDrawer />
             ) : (

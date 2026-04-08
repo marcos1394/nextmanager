@@ -11,9 +11,11 @@ import {
     TouchableOpacity,
     ScrollView,
     ActivityIndicator,
+    ActivityIndicator,
     RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons, Feather, MaterialIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -241,20 +243,26 @@ const MonitorScreen = ({ navigation }) => {
         }
     }, [user]);
 
-    // --- CORRECCIÓN DEL USEEFFECT (EL BUG ESTABA AQUÍ) ---
-    useEffect(() => {
-        // Ejecutamos SIEMPRE al inicio para verificar si tiene restaurante o no
-        fetchData(); 
+    // --- CORRECCIÓN DE FUGAS DE MEMORIA USANDO USEFOCUSEFFECT ---
+    useFocusEffect(
+        useCallback(() => {
+            // Ejecutamos siempre que la pantalla recibe foco (o cambian dependencias)
+            fetchData(); 
 
-        // Solo configuramos el intervalo SI tiene restaurante y está en vivo
-        let interval;
-        if (isLive && hasRestaurant) {
-            interval = setInterval(fetchData, 15000);
-        }
-        return () => {
-            if (interval) clearInterval(interval);
-        };
-    }, [isLive, hasRestaurant, fetchData]); // Dependencias corregidas
+            let interval;
+            if (isLive && hasRestaurant) {
+                // Polling cada 15s solo mientras la pantalla esté enfocada
+                interval = setInterval(fetchData, 15000);
+            }
+            
+            // Cleanup: se ejecuta cuando la pantalla PIERDE EL FOCO o el componente se desmonta
+            return () => {
+                if (interval) {
+                    clearInterval(interval);
+                }
+            };
+        }, [isLive, hasRestaurant, fetchData]) 
+    );
 
     const onRefresh = useCallback(() => {
         setIsRefreshing(true);

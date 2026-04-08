@@ -349,25 +349,15 @@ const LoginScreen = () => {
 
         try {
             // 1. Llamamos al AuthContext
-            // (Esta función guarda tokens, actualiza el usuario y nos dice a dónde ir)
-            const destination = await login(formData.email, formData.password);
+            // (Esta función guarda tokens, actualiza el usuario)
+            await login(formData.email, formData.password);
 
             if (Platform.OS === 'ios') {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
-
-            // 2. Lógica de Redirección (Simplificada para Mobile)
             
-            // CASO A: El usuario NO tiene un plan activo.
-            if (destination === '/plans') {
-                navigation.replace('Plans'); 
-            } 
-            // CASO B: El usuario YA tiene plan.
-            // (Ya sea que vaya a '/dashboard' o '/restaurant-config', en mobile vamos al Monitor).
-            else {
-                // Omitimos la configuración de restaurante en mobile y vamos directo a la acción.
-                navigation.replace('Monitor'); 
-            }
+            // La redirección ahora es manejada 100% por AppNavigator 
+            // en cuanto el estado 'isAuthenticated' cambia a true.
 
         } catch (error) {
             console.error('[LoginScreen] Error:', error);
